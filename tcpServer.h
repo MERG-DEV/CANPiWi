@@ -9,14 +9,15 @@
 #include "canHandler.h"
 #include "Turnout.h"
 #include "nodeConfigurator.h"
-
+#include "sessionHandler.h"
 
 class Client;
+class sessionHandler;
 
 class tcpServer
 {
     public:
-        tcpServer(log4cpp::Category *logger, int port, canHandler* can,CLIENT_TYPE clientType);
+        tcpServer(log4cpp::Category *logger, int port, canHandler* can, sessionHandler *session_handler, CLIENT_TYPE clientType);
         virtual ~tcpServer();
         bool start();
         void setPort(int port);
@@ -32,11 +33,12 @@ class tcpServer
     private:
         canHandler *can;
         Client *tempClient;
+        sessionHandler *session_handler;
         int running;
         int port;
         int socket_desc, client_sock ,read_size;
         struct sockaddr_in server_addr;
-        int counter;        
+        int counter;
         CLIENT_TYPE clientType;
         log4cpp::Category *logger;
         std::map<int,Client*> clients;

@@ -17,6 +17,10 @@ nodeConfigurator::~nodeConfigurator()
 }
 
 void nodeConfigurator::setNotQuotedConfigKeys(){
+    /*
+    * used to inform these keys should be
+    * quoted when written to the config file
+    */
     not_quoted_config.push_back(TAG_APCHANNEL);
     not_quoted_config.push_back(TAG_NN);
     not_quoted_config.push_back(TAG_CANID);
@@ -28,8 +32,12 @@ void nodeConfigurator::setNotQuotedConfigKeys(){
     not_quoted_config.push_back(TAG_YL);
     not_quoted_config.push_back(TAG_RL);
     not_quoted_config.push_back(TAG_NODE_MODE);
+    not_quoted_config.push_back(TAG_SHUTDOWN_CODE);
 }
 
+/*print the nv variables to output
+* used for debug
+*/
 void nodeConfigurator::printMemoryNVs(){
     int i;
     cout << "NVs: ";
@@ -55,6 +63,7 @@ void nodeConfigurator::setNodeParams(byte p1,byte p2, byte p3,byte p4,byte p5, b
     NODEPARAMS[19] = 1;
 
 }
+
 byte nodeConfigurator::getNodeParameter(byte idx){
     //idx starts at 1
     if (idx < NODE_PARAMS_SIZE){
@@ -96,7 +105,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
         logger->debug ("Received all variables. Saving to file.");
         printMemoryNVs();
         // SSID
-        tosave = nvToString(P_SSID,P5_SIZE);
+        tosave = nvToString(P_SSID,SSID_SIZE);
         original = getSSID();
         if (tosave.compare(original) != 0){
             //changed. need reconfigure
@@ -111,7 +120,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
         }
 
         //Password
-        tosave = nvToString(P_PASSWD,P6_SIZE);
+        tosave = nvToString(P_PASSWD,SSIDPWD_SIZE);
         original = getPassword();
         if (tosave.compare(original) != 0){
             //changed. need reconfigure
@@ -125,6 +134,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
         }
 
         //Router SSID
+        /*
         tosave = nvToString(P_ROUTER_SSID,P7_SIZE);
         original = getRouterSSID();
         if (tosave.compare(original) != 0){
@@ -153,9 +163,9 @@ byte nodeConfigurator::setNV(int idx,byte val){
             logger->error ("Failed to save NVs Router password");
             status = 1;
         }
-
+        */
         //tcp port
-        itosave = nvToInt(P_TCP_PORT,P2_SIZE);
+        itosave = nvToInt(P_TCP_PORT,TCPPORT_SIZE);
         ioriginal = getTcpPort();
         if (itosave != ioriginal){
             //changed
@@ -170,7 +180,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
         }
 
         //grid tcp port
-        itosave = nvToInt(P_GRID_TCP_PORT,P3_SIZE);
+        itosave = nvToInt(P_GRID_TCP_PORT,GRIDPORT_SIZE);
         ioriginal = getcanGridPort();
         if (itosave != ioriginal){
             //changed
@@ -184,7 +194,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
         }
 
         //start event id
-        itosave = nvToInt(P_START_EVENT,P12_SIZE);
+        itosave = nvToInt(P_START_EVENT,STARTEV_SIZE);
         ioriginal = getStartEventID();
         if (itosave != ioriginal){
             //changed
@@ -198,7 +208,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
         }
 
         //turnout
-        tosave = nvToString(P_TURNOUT_FILE,P10_SIZE);
+        tosave = nvToString(P_TURNOUT_FILE,TURNOUT_SIZE);
         original = getTurnoutFile(false);
         if (tosave.compare(original) != 0){
             //changed
@@ -216,7 +226,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
             logger->error ("Failed to save NVs momentaries");
             status = 1;
         }
-
+        //AP mode
         if (nvToApMode() != getAPMode()){
             //changed
             logger->debug("########### AP mode changed");
@@ -228,7 +238,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
             logger->error ("Failed to save NV ap mode");
             status = 1;
         }
-
+        //Ap no password
         if (nvToApNoPassword() != getAPNoPassword()){
             //changed
             logger->debug("########### AP no password changed");
@@ -240,7 +250,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
             logger->error ("Failed to save NV ap no password");
             status = 1;
         }
-
+        //wifi channel
         if (NV[P_WIFI_CHANNEL] != getApChannel()){
             //changed
             logger->debug("########### Wifi channel changed");
@@ -251,7 +261,7 @@ byte nodeConfigurator::setNV(int idx,byte val){
             logger->error ("Failed to save Wifi channel");
             status = 1;
         }
-
+        //grid server
         if (nvToCanGrid() != isCanGridEnabled()){
             //changed
             logger->debug("########### Enable grid changed");
@@ -260,6 +270,17 @@ byte nodeConfigurator::setNV(int idx,byte val){
         r = enableCanGrid(nvToCanGrid());
         if (!r) {
             logger->error ("Failed to save NV enable can grid");
+            status = 1;
+        }
+        //ed server
+        if (nvToEdserver() != getEdserver()){
+            //changed
+            logger->debug("########### Enable ed server");
+            if (status == 0) status = 3;
+        }
+        r = setEdserver(nvToEdserver());
+        if (!r) {
+            logger->error ("Failed to save NV ed server");
             status = 1;
         }
 
@@ -296,12 +317,12 @@ void nodeConfigurator::loadParamsToMemory(){
     loadParamsInt2Bytes(getcanGridPort(), P_GRID_TCP_PORT);
     loadParamsInt2Bytes(getStartEventID(), P_START_EVENT);
     NV[P_WIFI_CHANNEL] = getApChannel() & 0xff;
-    loadParamsString(getSSID(), P_SSID, P5_SIZE);
-    loadParamsString(getPassword(), P_PASSWD, P6_SIZE);
-    loadParamsString(getRouterSSID(), P_ROUTER_SSID, P7_SIZE);
-    loadParamsString(getRouterPassword(), P_ROUTER_PASSWD, P8_SIZE);
-    loadParamsString(getServiceName(), P_SERVICE_NAME, P9_SIZE);
-    loadParamsString(getTurnoutFile(), P_TURNOUT_FILE, P10_SIZE);
+    loadParamsString(getSSID(), P_SSID, SSID_SIZE);
+    loadParamsString(getPassword(), P_PASSWD, SSIDPWD_SIZE);
+    //loadParamsString(getRouterSSID(), P_ROUTER_SSID, P7_SIZE);
+    //loadParamsString(getRouterPassword(), P_ROUTER_PASSWD, P8_SIZE);
+    loadParamsString(getServiceName(), P_SERVICE_NAME, SERVICENAME_SIZE);
+    loadParamsString(getTurnoutFile(), P_TURNOUT_FILE, TURNOUT_SIZE);
     momentaryFnsToNVs();
 }
 
@@ -337,6 +358,11 @@ void nodeConfigurator::loadParam1(){
     if (getCreateLogfile()){
         //cout << "Create log file to true" << endl;
         p1 = p1 | 0b00100000;
+    }
+
+    if (getEdserver()){
+        //cout << "Create log file to true" << endl;
+        p1 = p1 | 0b0100000;
     }
 
     NV[PARAM1] = p1;
@@ -485,7 +511,7 @@ string nodeConfigurator::nvToMomentary(){
     stringstream ss;
     string fns;
 
-    for (i = 0; i < P11_SIZE ;i++){
+    for (i = 0; i < MFN_SIZE ;i++){
         a = NV[i+P_MOMENTARY_FNS];
         for (j = 0; j < 8; j++){
             if ((( a>>(7-j) ) & 0x01) == 1){
@@ -507,10 +533,10 @@ void nodeConfigurator::momentaryFnsToNVs(){
     string val;
     int i;
     byte t;
-    char fns[P11_SIZE];
+    char fns[MFN_SIZE];
     int idx,ibyte;
 
-    memset(fns,0,P11_SIZE);
+    memset(fns,0,MFN_SIZE);
 
     val = getMomentaryFn();
 
@@ -537,7 +563,7 @@ void nodeConfigurator::momentaryFnsToNVs(){
             }
             logger->debug("FN momentary bytes %02x %02x %02x %02x",fns[0],fns[1],fns[2],fns[3]);
             //copy to memory
-            for (i=0; i< P11_SIZE; i++){
+            for (i=0; i< MFN_SIZE; i++){
                 NV[i+P_MOMENTARY_FNS]= fns[i];
             }
         }
@@ -605,6 +631,14 @@ bool nodeConfigurator::nvToApNoPassword(){
 bool nodeConfigurator::nvToCreateLogfile(){
 
     if ((NV[PARAM1] & 0b00100000) == 0b00100000){
+        return true;
+    }
+    return false;
+}
+
+bool nodeConfigurator::nvToEdserver(){
+
+    if ((NV[PARAM1] & 0b01000000) == 0b01000000){
         return true;
     }
     return false;
@@ -761,6 +795,29 @@ bool nodeConfigurator::setAPMode(bool apmode){
 
     if (config.find(TAG_AP_MODE) == config.end()) return false;
     config[TAG_AP_MODE] = r;
+    return true;
+}
+
+bool nodeConfigurator::getEdserver(){
+    string ret;
+    ret = getStringConfig(TAG_ED_SERVER);
+    if (ret.empty()){
+        if (logger != nullptr) logger->error("Failed to get edserver . Default is true");
+        else cout << "Failed to get edserver . Default is true" << endl;
+        return true;
+    }
+    if ((ret.compare("true") == 0) | (ret.compare("TRUE") == 0) | (ret.compare("True") == 0)){
+        return true;
+    }
+    return false;
+}
+bool nodeConfigurator::setEdserver(bool edserver){
+    string r;
+    if (edserver) r = "True";
+    else r = "False";
+
+    if (config.find(TAG_ED_SERVER) == config.end()) return false;
+    config[TAG_ED_SERVER] = r;
     return true;
 }
 
@@ -927,7 +984,7 @@ bool nodeConfigurator::setLogAppend(bool val){
     if (val) r = "True";
     else r = "False";
 
-    if (config.find(TAG_SERV_NAME) == config.end()) return false;
+    if (config.find(TAG_LOGAPPEND) == config.end()) return false;
     config[TAG_SERV_NAME] = r;
     return true;
 }
@@ -937,6 +994,30 @@ bool nodeConfigurator::getLogAppend(){
     if (ret.empty()){
         if (logger != nullptr) logger->error("Failed to get logappend . Default is false");
         else cout << "Failed to get logappend . Default is false" << endl;
+        return false;
+    }
+    if ((ret.compare("true") == 0) | (ret.compare("TRUE") == 0) | (ret.compare("True") == 0)){
+        return true;
+    }
+    return false;
+}
+
+bool nodeConfigurator::setLogConsole(bool val){
+    string r;
+    if (val) r = "True";
+    else r = "False";
+
+    if (config.find(TAG_LOGCONSOLE) == config.end()) return false;
+    config[TAG_SERV_NAME] = r;
+    return true;
+}
+
+bool nodeConfigurator::getLogConsole(){
+    string ret;
+    ret = getStringConfig(TAG_LOGCONSOLE);
+    if (ret.empty()){
+        if (logger != nullptr) logger->error("Failed to get log console . Default is false");
+        else cout << "Failed to get log console . Default is false" << endl;
         return false;
     }
     if ((ret.compare("true") == 0) | (ret.compare("TRUE") == 0) | (ret.compare("True") == 0)){
@@ -1144,6 +1225,31 @@ bool nodeConfigurator::setYellowLed(int val){
     config[TAG_YL] = ss.str();
     return true;
 }
+
+int nodeConfigurator::getShutdownCode(){
+    int ret;
+    ret = getIntConfig(TAG_SHUTDOWN_CODE);
+    if (ret == INTERROR){
+        string r = getStringConfig(TAG_SHUTDOWN_CODE);
+        if (r.size() > 0){
+            //try to convert
+            try{
+                ret = atoi(r.c_str());
+            }
+            catch(...){
+                if (logger != nullptr) logger->error("Failed to convert %s to int",  r.c_str());
+                else  cout << "Failed to convert " << r << " to int" << endl;
+            }
+        }
+        else{
+            if (logger != nullptr) logger->error("Failed to get the shutdown code. Default is -1");
+            else cout << "Failed to get the shutdown code. Default is -1" << endl;
+        }
+        ret = -1;
+    }
+    return ret;
+}
+
 /* 0 is SLIM mode 1 is FLIM
 * default is SLIM
 */
@@ -1165,7 +1271,7 @@ int nodeConfigurator::getNodeMode(){
             }
         }
         else{
-            if (logger != nullptr) logger->error( "Node Mode.Failed to get the yellow_led_pin. Default is 0 SLIM");
+            if (logger != nullptr) logger->error( "Node Mode.Failed to get the node mode. Default is 0 SLIM");
             else cout << "Node Mode. Failed to get the node_mode. Default is 0 SLIM" << endl;
             ret = 0;
         }
@@ -1177,8 +1283,42 @@ bool nodeConfigurator::setNodeMode(int val){
     ss << val;
     if (config.find(TAG_NODE_MODE) == config.end()){
        return setNewPair(TAG_NODE_MODE, ss.str(), false);
-    } 
+    }
     config[TAG_NODE_MODE] = ss.str();
+    return saveConfig();
+}
+
+int nodeConfigurator::getOrphanTimeout(){
+    int ret;
+    ret = getIntConfig(TAG_ORPHAN_TIMEOUT);
+    if (ret == INTERROR){
+        string r = getStringConfig(TAG_ORPHAN_TIMEOUT);
+        if (r.size() > 0){
+            //try to convert
+            try{
+                ret = atoi(r.c_str());
+            }
+            catch(...){
+                if (logger != nullptr) logger->error("Orphan timeout. Failed to convert %s to int",  r.c_str());
+                else cout << "Orphan timeout. Failed to convert " << r << " to int" << endl;
+                ret = 30;//seconds
+            }
+        }
+        else{
+            if (logger != nullptr) logger->error( "Orphan timeout.Failed to get the orphan timeout. Default is 30 s");
+            else cout << "Orphan timeout. Failed to get the the orphan timeout. Default is 30 s" << endl;
+            ret = 30;//seconds
+        }
+    }
+    return ret;
+}
+bool nodeConfigurator::setOrphanTimeout(int val){
+    stringstream ss;
+    ss << val;
+    if (config.find(TAG_ORPHAN_TIMEOUT) == config.end()){
+       return setNewPair(TAG_ORPHAN_TIMEOUT, ss.str(), false);
+    }
+    config[TAG_ORPHAN_TIMEOUT] = ss.str();
     return saveConfig();
 }
 

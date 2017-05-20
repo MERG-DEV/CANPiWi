@@ -15,23 +15,23 @@ Turnout::~Turnout()
 }
 
 int Turnout::load(string fileName){
-    turnoutFile = fileName;    
-    
+    turnoutFile = fileName;
+
     string key;
     int value;
 
-    logger->debug("Turnout opening file %s",fileName.c_str());
+    logger->debug("[Turnout] Turnout opening file %s",fileName.c_str());
     try{
         ifstream infile(fileName);
         while (infile >> key >> value){
-            logger->debug("Adding turnout %s %d",key.c_str(),value);
+            logger->debug("[Turnout] Adding turnout %s %d",key.c_str(),value);
             addTurnout(key,value);
         }
         infile.close();
     }
     catch(...){
         return 0;
-    }    
+    }
     //return number of turnouts entries
     return turnouts_code.size();
 }
@@ -64,7 +64,7 @@ string Turnout::getStartInfo(){
 
     if (turnouts_code.size() == 0){
         ss << "\n";
-        logger->debug("Turnout start info %s",ss.str().c_str());
+        logger->debug("[Turnout] Turnout start info %s",ss.str().c_str());
         return ss.str();
     }
     ss << "\nPTL";
@@ -82,7 +82,7 @@ string Turnout::getStartInfo(){
         ss << closed_code;
         it++;
     }
-    logger->debug("Turnout start info %s",ss.str().c_str());
+    logger->debug("[Turnout] Turnout start info %s",ss.str().c_str());
 
     return ss.str();
 }
@@ -99,7 +99,7 @@ string Turnout::getTurnoutMsg(int tcode){
     ss << tcode;
     ss << ";-";
     ss << tcode;
-    logger->debug("Turnout message %s",ss.str().c_str());
+    logger->debug("[Turnout] Turnout message %s",ss.str().c_str());
     return ss.str();
 }
 

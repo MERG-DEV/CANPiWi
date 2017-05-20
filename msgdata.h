@@ -1,3 +1,6 @@
+#ifndef MSGDATA_H
+#define MSGDATA_H
+
 //software vesion
 #define SOFT_VERSION "VN2.0"
 // no locos
@@ -42,3 +45,4 @@
 //regex to identify idle
 #define RE_IDLE "M[STA]+[SL\\*]([0-9]+)?<;>I"
 
+#endif //MSGDATA_H

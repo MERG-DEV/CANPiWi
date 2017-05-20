@@ -26,6 +26,10 @@ $code:
         id_btn_stop="btnStop"
         id_btn_restart_all="btnRestartAll"
 	id_btn_update_file="btnUpdateFile"
+        id_orphan_timeout="orphan_timeout"
+        id_btn_shutdown="btnShutdown"
+        id_shutdown_code="shutdown_code"
+	id_edserver="edserver"
 
 <!DOCTYPE html>
 <html lang="en">
@@ -41,10 +45,12 @@ $code:
 <body>
            <img src="/static/merg_logo.png" />      
 <div class="container-fluid">
-           <header><h3>CANPiWi Configuration<br/></h3></header>
+           <header><h3>CANPiWi 1.4 Configuration<br/></h3></header>
            <header><h4>$msg<br/></h4></header>
   <div class="row-fluid">
            <form class="form" method="post"> 
+              $:form[id_btn_shutdown].render()              
+              <br><br>
               $:form[id_apmode].description : 
 	      $:form[id_apmode].render()
 	      <br><br>
@@ -71,7 +77,10 @@ $code:
 	      <br>
               $:form[id_grid_enable].description : 
               $:form[id_grid_enable].render()
-              <br><br>
+              <br><br>	      
+              $:form[id_edserver].description : 
+              $:form[id_edserver].render()
+              <br>
               $:form[id_ed_tcpport].description : 
               $:form[id_ed_tcpport].render()
 	      <br>
@@ -83,6 +92,12 @@ $code:
 	      <br>
               $:form[id_start_event_id].description : 
               $:form[id_start_event_id].render()
+              <br>
+              $:form[id_orphan_timeout].description :
+              $:form[id_orphan_timeout].render()
+              <br>
+              $:form[id_shutdown_code].description :
+              $:form[id_shutdown_code].render()
 	      <br>
               $:form[id_turnout_file].description : 
               $:form[id_turnout_file].render()

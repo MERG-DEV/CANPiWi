@@ -38,7 +38,7 @@ Extracted from the Developers Guide for CBUS (Version 5g)
 #define MID 46
 //Software version
 #define MSOFT_VERSION 1
-#define MSOFT_MIN_VERSION 'b'
+#define MSOFT_MIN_VERSION 4 
 #define MFLAGS 0b00000110
 #define NODE_NAME "CANPiWi"
 #define DEFAULT_CANID 100
@@ -47,6 +47,7 @@ Extracted from the Developers Guide for CBUS (Version 5g)
 #define ETHERCAN 1
 #define NODE_PARAMS_SIZE 20 //node parameters
 
+#define BS  128
 
 // CBUS opcodes list
 // Packets with no data bytes

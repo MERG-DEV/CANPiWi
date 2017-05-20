@@ -6,6 +6,7 @@
 #include "opcodes.h"
 #include "msgdata.h"
 #include "Turnout.h"
+#include "sessionHandler.h"
 
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
@@ -18,9 +19,8 @@
 #include <regex>
 
 #define BUFFER_SIZE 1024
-#define CBUS_KEEP_ALIVE  4000 //ms
+
 #define ED_KEEP_ALIVE  9000 //ms
-#define BS  128
 #define ST  30 //ms
 
 using namespace std;
@@ -28,7 +28,9 @@ using namespace std;
 class tcpClient : public Client
 {
     public:
-        tcpClient(log4cpp::Category *logger, tcpServer *server, canHandler* can, int client_sock, struct sockaddr_in client_addr, int id, nodeConfigurator *config);
+        tcpClient(log4cpp::Category *logger, tcpServer *server, canHandler* can,
+                  int client_sock, struct sockaddr_in client_addr, int id,
+                  nodeConfigurator *config, sessionHandler *session_handler);
         virtual ~tcpClient();
         void start(void *param);
         void stop();
@@ -39,6 +41,7 @@ class tcpClient : public Client
         int running;
         edSession* edsession;
         std::map<int,edSession*> sessions; //the loco number is the key
+        sessionHandler *session_handler;
         Turnout *turnouts;
         std::queue<can_frame> in_msgs;
         pthread_mutex_t m_mutex_in_cli;
@@ -66,7 +69,15 @@ class tcpClient : public Client
         bool programmingFn(int fn, int loco,int onoff);
         int getLoco(string msg);
 
+		void releaseAllSessions();
+		void releaseActualSession();
+		void deleteUnsetSessions();
+		void retrieveRemainingSessions();
+		void ackEDSessionCreated(edSession *ed, bool sendSpeedMode);
+		bool sessions_retrieved;
+
         void setStartSessionTime();
+        void shutdown();
 
         regex re_speed;
         regex re_session;

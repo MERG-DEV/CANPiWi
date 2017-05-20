@@ -1,0 +1,9 @@
+*.pyc
+.idea/
+.idea/workspace.xml
+*.o
+c/canpi/obj
+c/canpi/bin
+c/canpi/canpi.log
+canpi.log
+copyfiles.sh

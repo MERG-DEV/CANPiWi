@@ -3,7 +3,7 @@
 #include "tcpClientGridConnect.h"
 
 
-tcpServer::tcpServer(log4cpp::Category *logger, int port, canHandler* can,CLIENT_TYPE clientType)
+tcpServer::tcpServer(log4cpp::Category *logger, int port, canHandler* can, sessionHandler *session_handler, CLIENT_TYPE clientType)
 {
     //ctor
     this->logger = logger;
@@ -11,6 +11,7 @@ tcpServer::tcpServer(log4cpp::Category *logger, int port, canHandler* can,CLIENT
     this->can = can;
     counter = 0;
     this->clientType = clientType;
+    this->session_handler = session_handler;
 }
 
 tcpServer::~tcpServer()
@@ -134,7 +135,7 @@ void tcpServer::run(void* param){
                 }
                 else{
                     tcpClient *client;
-                    client = new tcpClient(logger,this,can,client_sock, client_addr,counter,config);
+                    client = new tcpClient(logger,this,can,client_sock, client_addr,counter,config,session_handler);
                     if (clients.size() == 0){
                         turnouts->reload();
                     }

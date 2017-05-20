@@ -48,7 +48,7 @@ else
         echo "'upgrade' directory created successfully"
     else
         echo "Failed to create 'upgrade' directory"
-    fi 
+    fi
 fi
 
 #Bonjour files
@@ -99,7 +99,7 @@ is_pb_pressed(){
       sleep 1
       v=`cat /sys/class/gpio/gpio${p}/value`
    fi
-   echo $v 
+   echo $v
 }
 
 blink_red_led(){
@@ -123,7 +123,7 @@ reconfigure_if_pb_pressed(){
       blink_red_led
       unset_red_led
       echo "Push button pressed. Reconfiguring"
-      ap_no_password="true" 
+      ap_no_password="true"
       sed -i 's/ap_mode="false"/ap_mode="true"/Ig' $config
       sed -i 's/ap_no_password=false/ap_no_password="true"/Ig' $config
       setup_ap_mode
@@ -135,19 +135,42 @@ reconfigure_if_pb_pressed(){
    fi
 }
 
+is_edserver_not_enabled(){
+
+   grep -i "edserver=\"false\"" ${config}
+   #if [[ $? -eq 0 ]];then
+   #   echo 0
+   #else 
+      #true
+   #   echo 1
+   #fi
+}
+
+set_avahi_daemon(){
+   
+   is_edserver_not_enabled
+   if [ $? -eq 1 ];then
+      echo "Starting bonjour service"
+      /etc/init.d/avahi-daemon start
+   else
+      echo "Stoping bonjour service"
+      /etc/init.d/avahi-daemon stop 
+   fi
+}
+
 get_red_led_pin(){
    grep red_led_pin ${config}
    if [[ $? -eq 0 ]];then
-      ledpin=`grep red_led_pin ${config} |cut -d "=" -f 2` 
+      ledpin=`grep red_led_pin ${config} |cut -d "=" -f 2`
    else
-      ledpin=22 
+      ledpin=22
       echo "red_led_pin=${ledpin}" >> ${config}
    fi
 
    if [[ $ledpin > 1 && $ledpin < 30 ]];then
       echo ${ledpin}
    else
-      ledpin=22 
+      ledpin=22
       #echo "red_led_pin=${ledpin}" >> ${config}
       echo ${ledpin}
    fi
@@ -183,9 +206,9 @@ get_web_pid() {
 
 is_wifi_running(){
    #the wifi is running if we have and ip address
-   ipaddr=`ip addr | grep -A2 'wlan0:' |grep -A2 'state UP' -A2 | tail -n1 | awk '{print $2}'` 
+   ipaddr=`ip addr | grep -A2 'wlan0:' |grep -A2 'state UP' -A2 | tail -n1 | awk '{print $2}'`
    [[ $ipaddr =~ [0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+ ]]
-   echo $?   
+   echo $?
 }
 
 is_web_running() {
@@ -231,9 +254,9 @@ setup_bonjour() {
     mv -f "${bonjour_template}.tmp" $bonjour_file
 
     #restart the service
-    #echo "Restarting the bonjour service"
-    #/etc/init.d/avahi-daemon restart
-    #sleep 1
+    echo "Restarting the bonjour service"
+    /etc/init.d/avahi-daemon restart
+    sleep 1
     #r=`/etc/init.d/avahi-daemon status`
     #echo $r | grep "active (running)"
     if is_avahi_running;
@@ -663,6 +686,18 @@ stop_webserver(){
     return 0
 }
 
+is_reset_enabled(){
+    #check if the property reset_enabled exists and is set to true
+    #the variable is used to check if the pb is pushed while booting
+    grep -i "reset_enabled=\"true\"" $config
+    if [ $? -eq 0 ];then
+        return 1
+    else
+        return 0
+    fi  
+}
+
+
 #setup the push button
 echo "Setting push button"
 set_push_button
@@ -670,23 +705,32 @@ set_push_button
 case "$1" in
     start)
         #reconfigure if the push button is pressed
-        reconfigure_if_pb_pressed
+        
+        is_reset_enabled
+        if [ $? -eq 1 ];then
+            reconfigure_if_pb_pressed
+        fi
+
         setup_red_led
-        unset_red_led 
+        unset_red_led
         if [[ is_wifi_running -eq 0 ]] ; then
            echo "We found a valid ip. Wifi is running"
-           set_red_led 
+           set_red_led
         fi
         setup_bonjour
+
         start_webserver
         start_canpi
         if [[ $? -eq 1 ]]; then
             exit 1
         fi
+        set_avahi_daemon
     ;;
     stop)
         stop_webserver
         stop_canpi
+        echo "Stoping bonjour service"
+        /etc/init.d/avahi-daemon stop
         #kill the rest
         kill_all_processes "canpi"
     ;;
@@ -694,12 +738,16 @@ case "$1" in
         setup_red_led
         setup_bonjour
         start_canpi
+        set_avahi_daemon
+
         if [[ $? -eq 1 ]]; then
             exit 1
         fi
     ;;
     stopcanpi)
         stop_canpi
+        echo "Stoping bonjour service"
+        /etc/init.d/avahi-daemon stop
         if [[ $? -eq 1 ]]; then
             exit 1
         fi
@@ -719,6 +767,8 @@ case "$1" in
         if [[ $? -eq 1 ]]; then
             exit 1
         fi
+
+        set_avahi_daemon
     ;;
     restart)
         $0 stop
@@ -761,8 +811,12 @@ case "$1" in
             exit 1
         fi
     ;;
+    shutdown)
+        echo "Shutting down"
+        sudo halt 
+    ;;
     *)
-    echo "Usage: $0 {start|stop|restart|status|configure|startcanpi|stopcanpi|restartcanpi}"
+    echo "Usage: $0 {start|stop|restart|status|configure|startcanpi|stopcanpi|restartcanpi|shutdown|upgrade}"
     exit 1
     ;;
 esac

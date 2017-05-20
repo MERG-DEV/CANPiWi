@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 . /lib/lsb/init-functions
@@ -40,6 +40,7 @@ create_default_canpi_config(){
   echo "#INFO,WARN,DEBUG" >> $conf
   echo "loglevel=\"INFO\"" >> $conf
   echo "logappend=\"false\"" >> $conf
+  echo "log_console=\"false\"" >> $conf
   echo "#ed service config" >> $conf
   echo "tcpport=5555" >> $conf
   echo "candevice=\"can0\"" >> $conf
@@ -56,15 +57,25 @@ create_default_canpi_config(){
   echo "#if not running in ap mode use this" >> $conf
   echo "router_ssid=\"SSID\"" >> $conf
   echo "router_password=\"PASSWORD\"" >> $conf
-  echo "node_number=7890" >> $conf
+  echo "node_number=4321" >> $conf
+  echo "node_mode=0" >> $conf
   echo "turnout_file=\"turnout.txt\"" >> $conf
   echo "fn_momentary=\"2\"" >> $conf
   echo "canid=100" >> $conf
-  echo "button_pin=4" >> $conf
-  echo "green_led_pin=18" >> $conf
-  echo "yellow_led_pin=27" >> $conf
+  echo "button_pin=17" >> $conf
+  echo "green_led_pin=24" >> $conf
+  echo "yellow_led_pin=23" >> $conf
+  echo "red_led_pin=22" >> $conf
   echo "ap_no_password=\"True\"" >> $conf
   echo "create_log_file=\"False\"" >> $conf
+  echo "start_event_id=1" >> $conf
+}
+
+message_header(){
+  echo ""
+  echo "-----------------------------------------------------"
+  echo "################ ${1} ################"
+  echo "-----------------------------------------------------"
 }
 
 echo "Type the Wifi SSID followed by [ENTER]:"
@@ -73,58 +84,78 @@ read wssid
 echo "Type the Wifi password followed by [ENTER]:"
 read wpassword
 
-echo "#############  Stop swap services and delete swap file ###############"
+#echo "#############  Stop swap services and delete swap file ###############"
 
-swapoff -a
-update-rc.d dphys-swapfile remove
-rm /var/swap
-apt-get -y purge dphys-swapfile
-apt-get -y autoremove
+#swapoff -a
+#update-rc.d dphys-swapfile remove
+#rm /var/swap
+#apt-get -y purge dphys-swapfile
+#apt-get -y autoremove
 
-echo "########### APT UPDATE ###############"
+message_header "APT UPDATE"
 apt-get -y update
-echo "########### GIT ###############"
+
+message_header "GIT"
 apt-get -y install git
-echo "########### HOSTAPD ###############"
+
+message_header "HOSTAPD"
 apt-get -y install hostapd
-echo "########### DHCP ###############"
+
+message_header "DHCP"
 apt-get -y install isc-dhcp-server
-echo "########### CAN UTILS ###############"
+
+message_header "CAN UTILS"
 apt-get -y install can-utils
 
-echo "########### BOOT CONFIG ###############"
-config_boot_config
-echo "########### CAN INTERFACE ###############"
+message_header "CAN INTERFACE"
 add_can_interface
 
-echo "########### GET THE CANPI CODE ###############"
-#get the code
+message_header "GET CANPI CODE"
 cd $dir
 git clone https://github.com/amaurial/canpi.git
 
-#echo "########### COMPILE CANPI ###############"
-#compile the code
+message_header "BOOT CONFIG"
+config_boot_config
+
+message_header "COMPILE CANPI"
 cd canpi
+<<<<<<< HEAD
 #make clean
 #make all
+
 echo "########### CREATE CONFIG ###############"
-create_default_canpi_config
+#create_default_canpi_config
+=======
+make clean
+make all
+
+message_header "CANPI CONFIG"
+echo "########### CREATE CONFIG ###############"
+if [ -f "$canpidir/canpi.cfg" ];
+then
+    echo "Config file already exists"
+else
+    echo "Config file does not exist. Creating a default one"
+    create_default_canpi_config
+fi
+
+>>>>>>> 87b1e8edb5d6a97f20fc2cc998b532ed7016df47
 #change the router ssid and password
 sed -i 's/SSID/'"$wssid"'/' "$canpidir/canpi.cfg"
 sed -i 's/PASSWORD/'"$wpassword"'/' "$canpidir/canpi.cfg"
 
-echo "########### WEBSERVER ###############"
+message_header "WEB SERVER"
 #install the webpy
 tar xvf webpy.tar.gz
 mv webpy-webpy-770baf8 webpy
 cd webpy
 python setup.py install
 
-echo "########### CHANGE DIR OWNER ###############"
+message_header "CHANGE DIR OWNER"
 cd $dir
 chown -R pi.pi canpi
 
-echo "########### MOVE CONFIG FILES ###############"
+message_header "MOVE CONFIG FILES"
 #backup and move some basic files
 FILE="/etc/hostapd/hostapd.conf"
 FILEBAK="${FILE}.bak"
@@ -156,13 +187,11 @@ cp "$canpidir/dhcpd.conf" /etc/dhcp/
 mv /etc/default/isc-dhcp-server /etc/default/isc-dhcp-server.old
 cp "$canpidir/isc-dhcp-server" /etc/default
 
-echo "########### CONFIG SCRIPT FILES ###############"
-#copy the configure script
+message_header "CONFIGURE SCRIPT FILES"
 cp "$canpidir/start_canpi.sh" /etc/init.d/
 chmod +x /etc/init.d/start_canpi.sh
 update-rc.d start_canpi.sh defaults
 
-echo "########### RUN CONFIGURE ###############"
-#run configure
+message_header "CONFIGURE THE RASPBERRY PI AND REBOOT"
 /etc/init.d/start_canpi.sh configure
 

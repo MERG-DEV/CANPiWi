@@ -425,8 +425,8 @@ void canHandler::run_queue_reader(void* param){
                         opc == OPC_CANID ||
                         opc == OPC_NVSET ||
                         opc == OPC_RQNPN ||
-                        opc == OPC_NVRD){
-                        //handleCBUSEvents(frame);
+                        opc == OPC_NVRD ||
+                        opc == OPC_ASON){
                         handleCBUSEvents(canframe);
                     }
                 }
@@ -600,13 +600,16 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
     char sendframe[CAN_MSG_SIZE];
     memset(sendframe,0,CAN_MSG_SIZE);
     byte Hb,Lb;
-    int tnn, status;
+    int tnn;
+    SCRIPT_ACTIONS status = NONE;
     struct can_frame frame = canframe.getFrame();
-    print_frame(&frame,"[canHandler] Handling CBUS config event");
+    print_frame(&frame,"[canHandler] Handling CBUS event");
 
     switch (frame.data[0]){
     case OPC_QNN:
+    {
         if (setup_mode) return;
+        
         Lb = node_number & 0xff;
         Hb = (node_number >> 8) & 0xff;
         logger->debug("[canHandler] Sending response for QNN.");
@@ -617,9 +620,23 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         sendframe[4] = MID;
         sendframe[5] = MFLAGS;
         put_to_out_queue(sendframe, 6, CLIENT_TYPE::CBUS);
-    break;
+
+        break;
+    }
     case OPC_RQNP:
+    {
         if (!setup_mode) return;
+
+        Lb = frame.data[2];
+        Hb = frame.data[1];
+        tnn = Hb;
+        tnn = (tnn << 8) | Lb;
+        byte p;
+        if (tnn != node_number){
+            logger->debug("[canHandler] RQNP is for another node. My nn: %d received nn: %d", node_number,tnn);
+            return;
+        }                                                                             
+
         logger->debug("[canHandler] Sending response for RQNP.");
         sendframe[0] = OPC_PARAMS;
         sendframe[1] = MANU_MERG;
@@ -630,8 +647,33 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         sendframe[6] = config->getNumberOfNVs();//TODO
         sendframe[7] = MSOFT_VERSION;
         put_to_out_queue(sendframe, 8, CLIENT_TYPE::CBUS);
-    break;
+
+        break;
+    }
+    case OPC_RQEVN:
+    {
+         Lb = frame.data[2];
+         Hb = frame.data[1];
+         tnn = Hb;
+         tnn = (tnn << 8) | Lb;
+         byte p;
+         if (tnn != node_number){
+             logger->debug("[canHandler] RQEVN is for another node. My nn: %d received nn: %d", node_number,tnn);
+             return;
+         }
+        Lb = node_number & 0xff;
+        Hb = (node_number >> 8) & 0xff;
+        logger->debug("[canHandler] Sending response for RQEVN.");
+        sendframe[0] = OPC_NUMEV;
+        sendframe[1] = Hb;
+        sendframe[2] = Lb;
+        sendframe[3] = 0;
+        put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
+
+        break;
+    }
     case OPC_RQMN:
+    {
         if (!setup_mode) return;
         logger->debug("[canHandler] Sending response for NAME.");
         sendframe[0] = OPC_NAME;
@@ -643,8 +685,10 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         sendframe[6] = ' ';
         sendframe[7] = ' ';
         put_to_out_queue(sendframe, 8, CLIENT_TYPE::CBUS);
-    break;
+        break;
+    }
     case OPC_RQNPN:
+    {
         Lb = frame.data[2];
         Hb = frame.data[1];
         tnn = Hb;
@@ -673,9 +717,10 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         sendframe[3] = frame.data[3];
         sendframe[4] = p;
         put_to_out_queue(sendframe, 5, CLIENT_TYPE::CBUS);
-    break;
-
+        break;
+    }
     case OPC_NVRD:
+    {
         Lb = frame.data[2];
         Hb = frame.data[1];
         tnn = Hb;
@@ -701,9 +746,11 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         sendframe[4] = config->getNV(frame.data[3]);
         put_to_out_queue(sendframe, 5, CLIENT_TYPE::CBUS);
         logger->debug("[canHandler] NVRD processed. Sent NVANS");
-    break;
+        break;
+    }
 
     case OPC_NVSET:
+    {
         Lb = frame.data[2];
         Hb = frame.data[1];
         tnn = Hb;
@@ -724,14 +771,15 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         }
 
         //1 error, 2 reconfigure , 3 restart the service
-        status = config->setNV(frame.data[3],frame.data[4]);
-        if (status == 1){
+        int st = config->setNV(frame.data[3],frame.data[4]);
+        if (st == 1){
             sendframe[0] = OPC_CMDERR;
             sendframe[1] = Hb;
             sendframe[2] = Lb;
             sendframe[3] = 9;
             put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
             logger->debug("[canHandler] NVSET failed. Sent Err");
+            status = NONE;
         }
         else{
             sendframe[0] = OPC_WRACK;
@@ -741,14 +789,19 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             logger->debug("[canHandler] NVSET ok. Sent wrack");
         }
 
-        if (status == 2 || status == 3){
+        if (st == 2 || st == 3){
+            if (st == 2) status = CONFIGURE;
+            if (st == 3) status = RESTART;
             restart_module(status);
         }
 
-    break;
-
+        break;
+    }
     case OPC_SNN:
+    {
+
         if (!setup_mode) return;
+
         Lb = frame.data[2];
         Hb = frame.data[1];
         tnn = Hb;
@@ -783,9 +836,10 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         config->setNodeMode(1); //FLIM
         logger->info("[canHandler] Finished setup. New node number is %d" , node_number);
 
-    break;
-
+        break;
+    }
     case OPC_CANID:
+    {
         if (setup_mode) return;
         logger->debug("[canHandler] Received set CANID.");
         Lb = frame.data[2];
@@ -815,9 +869,25 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             logger->error("[canHandler] Failed to save canid %d",canId);
         }
 
-    break;
+        break;
+    }
+    case OPC_ASON:
+    {
+        Lb = frame.data[4];
+        Hb = frame.data[3];
+        tnn = Hb;
+        tnn = (tnn << 8) | Lb;
+        logger->debug("[canHandler] Received set ASON %d", tnn);
+        if (tnn == config->getShutdownCode()){
+            logger->debug("[canHandler] Shuting down the node.");
+            restart_module(SHUTDOWN);
+            return;
+        }
 
+        break;
+    }
     case OPC_ENUM:
+    {
         if (setup_mode) return;
         //get node number
         int nn;
@@ -825,26 +895,35 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         nn = (nn << 8) | frame.data[2];
         logger->debug("[canHandler] OPC_ENUM node number %d",nn);
         doSelfEnum();
-    break;
+        break;
+    }
     case OPC_HLT:
+    {
         if (setup_mode) return;
         logger->info("[canHandler] Stopping CBUS");
         cbus_stopped = true;
-    break;
+        break;
+    }
     case OPC_BON:
+    {
         if (setup_mode) return;
         logger->info("[canHandler] Enabling CBUS");
         cbus_stopped = false;
-    break;
+        break;
+    }
     case OPC_ARST:
+    {
         if (setup_mode) return;
         logger->info("[canHandler] Enabling CBUS");
         cbus_stopped = false;
-    break;
+        break;
+    }
     case OPC_BOOT:
+    {
         if (setup_mode) return;
         logger->info("[canHandler] Rebooting");
-    break;
+        break;
+    }
     }
 }
 /**CAN_EFF_FLAG
@@ -853,22 +932,25 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
  * 2 reconfigure the module. It also forces a reboot.
  * 3 restarts the canpi and webserver services
  */
-void canHandler::restart_module(int status){
+void canHandler::restart_module(SCRIPT_ACTIONS action){
     string command;
     //MTA*<;>*
 
-    if (status == 2){
+    if (action == CONFIGURE){
         command = "/etc/init.d/start_canpi.sh configure";
     }
-    else if (status == 3){
+    else if (action == RESTART){
         command = "/etc/init.d/start_canpi.sh restart";
+    }
+    else if (action == SHUTDOWN){
+        command = "/etc/init.d/start_canpi.sh shutdown";
     }
     else{
         return;
     }
     //all parameters saved, we can restart or reconfigure the module
-    logger->debug("[canHandler] Restart after new configuration %d", status);
-    logger->debug("[canHandler] Stoping all servers");
+    logger->debug("[canHandler] Restart after new configuration %d", action);
+    logger->debug("[canHandler] Stopping all servers");
     vector<tcpServer*>::iterator server;
     if (servers.size() > 0){
         for (server = servers.begin();server != servers.end(); server++){
@@ -931,7 +1013,7 @@ void canHandler::doPbLogic(){
         nnReleaseTime = time(0)*1000;
         pb_pressed = false;
         logger->debug("[canHandler] Button released. Timer end [%le] difference [%lf]",nnReleaseTime, nnReleaseTime - nnPressTime );
-        
+
         char sendframe[CAN_MSG_SIZE];
         memset(sendframe,0,CAN_MSG_SIZE);
 
@@ -941,13 +1023,13 @@ void canHandler::doPbLogic(){
 
         //check if node number request
         if ((nnReleaseTime - nnPressTime) >= NN_PB_TIME){
-            
+
             if (config->getNodeMode() == 1){//change from FLIM to SSLIM
                 logger->info("Node was in FLIM. Setting to SLIM");
             	config->setNodeMode(0); //SLIM
             	gl.setval_gpio("1");
             	yl.setval_gpio("0");
-            	
+
             	sendframe[0] = OPC_NNREL;
             	sendframe[1] = Hb;
             	sendframe[2] = Lb;

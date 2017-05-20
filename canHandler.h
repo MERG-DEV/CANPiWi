@@ -1,5 +1,6 @@
 #ifndef CANHANDLER_H
 #define CANHANDLER_H
+
 #include <linux/can.h>
 #include <net/if.h>
 #include <linux/can/raw.h>
@@ -16,18 +17,19 @@
 #include <algorithm>
 #include <mutex>
 #include <condition_variable>
-#include "tcpServer.h"
 #include "utils.h"
 #include "opcodes.h"
 #include "gpio.h"
 #include "nodeConfigurator.h"
 #include "frameCAN.h"
+#include "tcpServer.h"
 
 #define CAN_MSG_SIZE 8
 #define WAIT_ENUM 200 //ms
 #define NN_PB_TIME 6000 //time the button for request node number is pressed is 8 seconds
 #define AENUM_PB_TIME 2000 //time the button for auto enum is pressed is 2 seconds
 #define BLINK_INTERVAL 300 //time in milliseconds seconds
+#define CBUS_KEEP_ALIVE  4000 //ms
 
 using namespace std;
 class tcpServer;
@@ -102,7 +104,7 @@ class canHandler
         //void handleCBUSEvents(struct can_frame frame);
         void handleCBUSEvents(frameCAN frame);
         void doPbLogic();
-        void restart_module(int status);
+        void restart_module(SCRIPT_ACTIONS action);
 
         void print_frame(can_frame *frame,string message);
 
