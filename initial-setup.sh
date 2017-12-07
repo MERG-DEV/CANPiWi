@@ -112,25 +112,17 @@ add_can_interface
 
 message_header "GET CANPI CODE"
 cd $dir
-git clone https://github.com/amaurial/canpi.git
+git clone https://github.com/MERG-DEV/CANPiWi.git canpi
 
 message_header "BOOT CONFIG"
 config_boot_config
 
 message_header "COMPILE CANPI"
 cd canpi
-<<<<<<< HEAD
-#make clean
-#make all
-
-echo "########### CREATE CONFIG ###############"
-#create_default_canpi_config
-=======
 make clean
 make all
 
 message_header "CANPI CONFIG"
-echo "########### CREATE CONFIG ###############"
 if [ -f "$canpidir/canpi.cfg" ];
 then
     echo "Config file already exists"
@@ -139,7 +131,6 @@ else
     create_default_canpi_config
 fi
 
->>>>>>> 87b1e8edb5d6a97f20fc2cc998b532ed7016df47
 #change the router ssid and password
 sed -i 's/SSID/'"$wssid"'/' "$canpidir/canpi.cfg"
 sed -i 's/PASSWORD/'"$wpassword"'/' "$canpidir/canpi.cfg"
