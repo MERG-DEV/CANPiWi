@@ -60,11 +60,10 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
         return;
     }
     try{
-        char buf[30];
-        memset(buf,0,20);
-        sprintf(buf,"canid:%d data:%02x %02x %02x %02x %02x %02x %02x %02x\n",canid, msg[0],msg[1],msg[2],msg[3],msg[4],msg[5],msg[6],msg[7]);
-        logger->debug("[%d] Tcp grid client received cbus message: %s",id,buf);
-
+        char buf[100];
+        memset(buf,0,100);
+        sprintf(buf,"canid:%d data:%02x %02x %02x %02x %02x %02x %02x %02x\n", canid, msg[0], msg[1], msg[2], msg[3], msg[4], msg[5], msg[6], msg[7]);
+        logger->debug("[%d] Tcp grid client received cbus message: %s", id, buf);
         /*
         The GridConnect protocol encodes messages as an ASCII string of up to 24 characters of the form:
         :ShhhhNd0d1d2d3d4d5d6d7;
@@ -73,48 +72,49 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
         The X indicates an extended CAN frame hhhh is the two byte header N or R indicates a normal
         or remote frame, in position 6 or 10 d0 - d7 are the (up to) 8 data bytes
         */
-        memset(buf,0,30);
+        memset(buf,0,100);
         byte h2, h1;
         int s;
         char frametype = 'N'; //should be N or R
         char t[2];
         //set frame type
         if ((canid & CAN_RTR_FLAG) == CAN_RTR_FLAG) frametype = 'R';
+
         //do the parse based on the extended or std frame
         if ((canid & CAN_EFF_FLAG) == CAN_EFF_FLAG){
             //extended frame
-            tempcanid = canid & CAN_EFF_MASK;            
+            tempcanid = canid & CAN_EFF_MASK;
             tempcanid = tempcanid << 3;
             ss.clear();ss.str();
             ss << ":X";
-            
-            /* 
+
+            /*
              * we have to set some bits to present to the grid
              * the reason is the CBUS implementation that includes
              * the RTR and the extended frame in the bytes of cangrid message
              * not just based on the "X" and "R" indication
              * The extended frame has the format of
-             * 
+             *
              * Field name and length in bits
-             * 
+             *
              * Identifier A = 11  First part of the (unique) identifier which also represents the message priority
-             * Substitute remote request (SRR) = 1 Must be recessive (1) 
+             * Substitute remote request (SRR) = 1 Must be recessive (1)
              * Identifier extension bit (IDE)= 1 Must be recessive (1) for extended frame format with 29-bit identifiers
              * Identifier B (green) = 18 Second part of the (unique) identifier which also represents the message priority
              * Remote transmission request (RTR) = 1   Must be dominant (0) for data frames and recessive (1) for remote request frames (see Remote Frame, below)
              * Total size is 32 bits
              * Bits
              * 1 2 3 4    5 6 7 8   9 10 11 12   13  14 15 16   17 18 19 20   21 22 23 24   25 26 27 28   29 30 31 32
-             * A A A A    A A A A   A A  A  1    IDE B  B  B    B  B  B  B    B  B  B  B    B  B  B  B    B  B  B  RTR 
-             * 
+             * A A A A    A A A A   A A  A  1    IDE B  B  B    B  B  B  B    B  B  B  B    B  B  B  B    B  B  B  RTR
+             *
              * We need to set the bits 12 13 and 32 and shift the other bits properly
-             * 
+             *
              * The bits from the linux stack are
              * Bits
              * 1 2 3 4    5 6 7 8   9 10 11 12   13 14 15 16   17 18 19 20 21   22 23 24 25   26 27 28   29 30  31  32
-             * A A A A    A A A A   A A  A  B    B  B  B  B    B  B  B  B  B    B  B  B  B    B  B  B    B  ERR RTR IDE 
-             */ 
-            
+             * A A A A    A A A A   A A  A  B    B  B  B  B    B  B  B  B  B    B  B  B  B    B  B  B    B  ERR RTR IDE
+             */
+
             /*
              * first highest byte of the 4. no need to fix - bits 1 to 8
              */
@@ -122,8 +122,8 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
             sprintf(t,"%02X",h1);
             ss << t;
 
-            /* 
-             * second highest byte of the 4. 
+            /*
+             * second highest byte of the 4.
              */
             h1 = tempcanid >> 16;
             sprintf(t,"%02X",h1);
@@ -204,7 +204,7 @@ void tcpClientGridConnect::run(void *param){
                 string message(msg);
 				msg_received++;
 				//logger->info("Put cangrid message to queue %d %s",msg_received , message.c_str());
-                pthread_mutex_lock(&m_mutex_in);                
+                pthread_mutex_lock(&m_mutex_in);
                 in_grid_msgs.push(message);
                 pthread_mutex_unlock(&m_mutex_in);
                 pthread_cond_signal(&m_condv_in);
@@ -262,7 +262,7 @@ void tcpClientGridConnect::handleClientGridMessage(string msg){
     char candata[CAN_MSG_SIZE];
 
     for (auto const& a:messages){
-		
+
         string ms(a);
 		//logger->info("Processing grid %s ", ms.c_str());
         if (a.size()<4){
@@ -331,7 +331,7 @@ void tcpClientGridConnect::handleClientGridMessage(string msg){
                     logger->debug("[%d] canid bytes %d %d %d %d",id,vcanid.at(0),vcanid.at(1),vcanid.at(2),vcanid.at(3));
                 }
             }
-            
+
             //create a can frame
             int icanid = vcanid.at(0);
             icanid = icanid << 8;

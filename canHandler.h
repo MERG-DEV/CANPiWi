@@ -70,6 +70,7 @@ class canHandler
         std::queue<frameCAN> in_msgs;
         std::queue<frameCAN> out_msgs;
         bool auto_enum_mode = false;
+        bool soft_auto_enum = false;
         bool setup_mode = false;
         bool cbus_stopped = false;
         bool pb_pressed = false;

@@ -458,20 +458,24 @@ void canHandler::run_queue_reader(void* param){
 
             if (!auto_enum_mode){
 
-            	//send RQNN
-            	char sendframe[CAN_MSG_SIZE];
-        	memset(sendframe,0,CAN_MSG_SIZE);
+                if (!soft_auto_enum){
 
-        	byte Lb,Hb;
-        	Lb = node_number & 0xff;
-        	Hb = (node_number >> 8) & 0xff;
-		logger->info("[canHandler] Doing request node number afer auto enum. Entering in setup mode");
+                    //send RQNN
+                    char sendframe[CAN_MSG_SIZE];
+                    memset(sendframe,0,CAN_MSG_SIZE);
 
-            	sendframe[0]=OPC_RQNN;
-            	sendframe[1] = Hb;
-            	sendframe[2] = Lb;
-            	setup_mode = true;
-            	put_to_out_queue(sendframe,3,CLIENT_TYPE::ED);
+                    byte Lb,Hb;
+                    Lb = node_number & 0xff;
+                    Hb = (node_number >> 8) & 0xff;
+                    logger->info("[canHandler] Doing request node number afer auto enum. Entering in setup mode");
+
+                    sendframe[0]=OPC_RQNN;
+                    sendframe[1] = Hb;
+                    sendframe[2] = Lb;
+                    setup_mode = true;
+                    put_to_out_queue(sendframe,3,CLIENT_TYPE::ED);
+                }
+                else soft_auto_enum = false;
              }
 
         }
@@ -542,9 +546,9 @@ void canHandler::doSelfEnum(){
     byte c = canId & 0x7f;
     frame.can_id = CAN_RTR_FLAG | c;
     frame.can_dlc = 0;
-    frame.data[0] = canId;
+    frame.data[0] = canId & 0xff;
     sysTimeMS_start = time(0)*1000;
-    put_to_out_queue(frame.can_id,(char*)frame.data,0,CLIENT_TYPE::ED);
+    put_to_out_queue(frame.can_id, (char*)frame.data, 0, CLIENT_TYPE::ED);
 }
 
 /**
@@ -582,6 +586,32 @@ void canHandler::finishSelfEnum(int id){
                     }
                 }
             }
+            if (soft_auto_enum){
+                char sendframe[CAN_MSG_SIZE];
+                memset(sendframe,0,CAN_MSG_SIZE);
+                byte Hb,Lb;
+                Lb = node_number & 0xff;
+                Hb = (node_number >> 8) & 0xff;
+
+                // check that could allocate a canid and if not send an error otherwise send a NNACK
+                if (canId == 0){
+                    //no canid available
+                    logger->debug("[canHandler] Could not allocate a canid");
+                    sendframe[0] = OPC_CMDERR;
+                    sendframe[1] = Hb;
+                    sendframe[2] = Lb;
+                    sendframe[3] = CMDERR_INVALID_EVENT;
+                    put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
+                    return;
+                }
+                else{
+                    logger->debug("[canHandler] New canid allocated. Sending NNACK");
+                    sendframe[0] = OPC_NNACK;
+                    sendframe[1] = Hb;
+                    sendframe[2] = Lb;
+                    put_to_out_queue(sendframe, 3, CLIENT_TYPE::CBUS);
+                }
+            }
         }
         else{
             canId = 1;
@@ -609,7 +639,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
     case OPC_QNN:
     {
         if (setup_mode) return;
-        
+
         Lb = node_number & 0xff;
         Hb = (node_number >> 8) & 0xff;
         logger->debug("[canHandler] Sending response for QNN.");
@@ -631,11 +661,12 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         Hb = frame.data[1];
         tnn = Hb;
         tnn = (tnn << 8) | Lb;
-        byte p;
+
+        /*
         if (tnn != node_number){
             logger->debug("[canHandler] RQNP is for another node. My nn: %d received nn: %d", node_number,tnn);
             return;
-        }                                                                             
+        }*/
 
         logger->debug("[canHandler] Sending response for RQNP.");
         sendframe[0] = OPC_PARAMS;
@@ -656,7 +687,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
          Hb = frame.data[1];
          tnn = Hb;
          tnn = (tnn << 8) | Lb;
-         byte p;
+
          if (tnn != node_number){
              logger->debug("[canHandler] RQEVN is for another node. My nn: %d received nn: %d", node_number,tnn);
              return;
@@ -703,7 +734,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             sendframe[0] = OPC_CMDERR;
             sendframe[1] = Hb;
             sendframe[2] = Lb;
-            sendframe[3] = 9;
+            sendframe[3] = CMDERR_INV_PARAM_IDX;
             put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
             return;
         }
@@ -734,7 +765,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             sendframe[0] = OPC_CMDERR;
             sendframe[1] = Hb;
             sendframe[2] = Lb;
-            sendframe[3] = 9;
+            sendframe[3] = CMDERR_INV_PARAM_IDX;
             put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
             logger->debug("[canHandler] NVRD Invalid index %d", frame.data[3]);
             return;
@@ -764,7 +795,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             sendframe[0] = OPC_CMDERR;
             sendframe[1] = Hb;
             sendframe[2] = Lb;
-            sendframe[3] = 9;
+            sendframe[3] = CMDERR_INV_PARAM_IDX;
             put_to_out_queue(sendframe,4 , CLIENT_TYPE::CBUS);
             logger->debug("[canHandler] NVSET Invalid index %d", frame.data[3]);
             return;
@@ -776,7 +807,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             sendframe[0] = OPC_CMDERR;
             sendframe[1] = Hb;
             sendframe[2] = Lb;
-            sendframe[3] = 9;
+            sendframe[3] = CMDERR_INV_PARAM_IDX;
             put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
             logger->debug("[canHandler] NVSET failed. Sent Err");
             status = NONE;
@@ -859,7 +890,7 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
             sendframe[0] = OPC_CMDERR;
             sendframe[1] = Hb;
             sendframe[2] = Lb;
-            sendframe[3] = 7;
+            sendframe[3] = CMDERR_INVALID_EVENT;
             put_to_out_queue(sendframe, 4, CLIENT_TYPE::CBUS);
             return;
         }
@@ -893,8 +924,11 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         int nn;
         nn = frame.data[1];
         nn = (nn << 8) | frame.data[2];
-        logger->debug("[canHandler] OPC_ENUM node number %d",nn);
-        doSelfEnum();
+        logger->debug("[canHandler] OPC_ENUM for node number %d",nn);
+        if (nn == node_number){
+            soft_auto_enum = true;
+            doSelfEnum();
+        }
         break;
     }
     case OPC_HLT:

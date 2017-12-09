@@ -15,6 +15,8 @@ If developing in a Raspberry pi with copy the file /lib/liblog4cpp.a.pi to /lib/
 
 Type **make all**.
 
+Use the script initial_setup.sh to setup the raspberry pi in AP mode and compile the project.
+
 For more information visit [MERG CANPiWi] (http://www.merg.org.uk/merg_wiki/doku.php?id=cbus:canwi)
 
 

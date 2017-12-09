@@ -38,7 +38,7 @@ Extracted from the Developers Guide for CBUS (Version 5g)
 #define MID 46
 //Software version
 #define MSOFT_VERSION 1
-#define MSOFT_MIN_VERSION 4 
+#define MSOFT_MIN_VERSION 5 
 #define MFLAGS 0b00000110
 #define NODE_NAME "CANPiWi"
 #define DEFAULT_CANID 100
