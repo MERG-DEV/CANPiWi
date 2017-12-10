@@ -351,22 +351,19 @@ void nodeConfigurator::loadParam1(){
     }
 
     if (getAPNoPassword()){
-        //cout << "Ap no password set to true" << endl;
         p1 = p1 | 0b00010000;
     }
 
     if (getCreateLogfile()){
-        //cout << "Create log file to true" << endl;
         p1 = p1 | 0b00100000;
     }
 
     if (getEdserver()){
-        //cout << "Create log file to true" << endl;
         p1 = p1 | 0b0100000;
     }
 
     NV[PARAM1] = p1;
-    //cout << "P1 " << p1 << " " << int(NV[0]) << endl;
+
 }
 
 void nodeConfigurator::loadParamsInt2Bytes(int value, unsigned int idx){
@@ -1266,14 +1263,14 @@ int nodeConfigurator::getNodeMode(){
             }
             catch(...){
                 if (logger != nullptr) logger->error("Node Mode. Failed to convert %s to int",  r.c_str());
-                else cout << "Node Mode. Failed to convert " << r << " to int" << endl;
-                ret = 0;
+                else cout << "Node Mode. Failed to convert " << r << " to int. Default is 0 SLIM" << endl;
+                ret = MTYP_SLIM;
             }
         }
         else{
             if (logger != nullptr) logger->error( "Node Mode.Failed to get the node mode. Default is 0 SLIM");
             else cout << "Node Mode. Failed to get the node_mode. Default is 0 SLIM" << endl;
-            ret = 0;
+            ret = MTYP_SLIM;
         }
     }
     return ret;

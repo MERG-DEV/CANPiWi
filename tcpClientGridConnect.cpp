@@ -61,7 +61,7 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
     }
     try{
         char buf[100];
-        memset(buf,0,100);
+        memset(buf,0,sizeof(buf));
         sprintf(buf,"canid:%d data:%02x %02x %02x %02x %02x %02x %02x %02x\n", canid, msg[0], msg[1], msg[2], msg[3], msg[4], msg[5], msg[6], msg[7]);
         logger->debug("[%d] Tcp grid client received cbus message: %s", id, buf);
         /*
@@ -72,7 +72,7 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
         The X indicates an extended CAN frame hhhh is the two byte header N or R indicates a normal
         or remote frame, in position 6 or 10 d0 - d7 are the (up to) 8 data bytes
         */
-        memset(buf,0,100);
+        memset(buf,0,sizeof(buf));
         byte h2, h1;
         int s;
         char frametype = 'N'; //should be N or R
@@ -179,11 +179,9 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
     }
     catch(runtime_error &ex){
         logger->debug("[%d] Grid client failed to process the can message",id);
-        //throw_line("Failed to process the can message");
     }
     catch(...){
         logger->debug("[%d] Grid client failed to process the can message. Unexpected error.",id);
-        //throw_line("Failed to process the can message");
     }
 }
 
@@ -203,11 +201,11 @@ void tcpClientGridConnect::run(void *param){
                 logger->debug("[%d] Received from grid client:%s Bytes:%d",id, msg, nbytes);
                 string message(msg);
 				msg_received++;
-				//logger->info("Put cangrid message to queue %d %s",msg_received , message.c_str());
                 pthread_mutex_lock(&m_mutex_in);
                 in_grid_msgs.push(message);
-                pthread_mutex_unlock(&m_mutex_in);
                 pthread_cond_signal(&m_condv_in);
+                pthread_mutex_unlock(&m_mutex_in);
+
             }
             catch(const runtime_error &ex){
                 logger->debug("[%d] Grid client failed to process the client grid message\n%s",id,ex.what());
@@ -231,15 +229,17 @@ void tcpClientGridConnect::run(void *param){
 void tcpClientGridConnect::run_in_grid_msgs(void *param){
     string msg;
     while (running){
-	if (!in_grid_msgs.empty()){
-	   pthread_mutex_lock(&m_mutex_in);
+        pthread_mutex_lock(&m_mutex_in);
+        pthread_cond_wait(&m_condv_in, &m_mutex_in);
+        if (in_grid_msgs.empty()){
+            pthread_mutex_unlock(&m_mutex_in);
+        }
+        else{
            msg = in_grid_msgs.front();
            in_grid_msgs.pop();
            pthread_mutex_unlock(&m_mutex_in);
            handleClientGridMessage(msg);
-		   msg_processed++;
-		   //logger->info("Process cangrid message from queue %d %s", msg_processed, msg.c_str());
-           usleep(2000);
+           msg_processed++;
         }
     }
     logger->debug("Stopping cangrid queue reader");
@@ -264,7 +264,6 @@ void tcpClientGridConnect::handleClientGridMessage(string msg){
     for (auto const& a:messages){
 
         string ms(a);
-		//logger->info("Processing grid %s ", ms.c_str());
         if (a.size()<4){
             continue;
         }

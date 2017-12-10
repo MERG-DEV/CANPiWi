@@ -40,9 +40,6 @@ tcpClient::tcpClient(log4cpp::Category *logger, tcpServer *server,
 
 tcpClient::~tcpClient()
 {
-    //dtor
-    //this->sessions.clear();
-    //delete(edsession);
     pthread_mutex_destroy(&m_mutex_in_cli);
     pthread_cond_destroy(&m_condv_in_cli);
 }
@@ -70,10 +67,8 @@ void tcpClient::start(void *param){
     ss << turnouts->getStartInfo();ss << "\n";
     ss << START_INFO_PRT;ss << "\n";
     ss << START_INFO_PRL;ss << "\n";
-    //ss << "PRL]\[MAINT}|{Main}|{]\[YARD1}|{Yard1}|{";ss << "\n\n";
     ss << START_INFO_RCC;ss << "\n";
     ss << START_INFO_PW;ss << "\n";
-    //logger->debug("[%d] [tcpClient] Sending start info :%s",id, ss.str().c_str());
     sendToEd(ss.str());
     run(nullptr);
 }
@@ -99,11 +94,13 @@ void tcpClient::canMessage(int canid,const char* msg, int dlc){
     frame.data[6] = msg[6];
     frame.data[7] = msg[7];
 
-    //pthread_mutex_lock(&m_mutex_in_cli);
-    //cout << "#######@@@###@#@###@" << endl;
+    pthread_mutex_lock(&m_mutex_in_cli);
+
     in_msgs.push(frame);
-    //pthread_mutex_unlock(&m_mutex_in_cli);
-    //pthread_cond_signal(&m_condv_in_cli);
+
+    pthread_cond_signal(&m_condv_in_cli);
+    pthread_mutex_unlock(&m_mutex_in_cli);
+
 }
 
 void tcpClient::run(void *param){
@@ -124,7 +121,6 @@ void tcpClient::run(void *param){
 			 * mark the existing sessions as orphan
 			 * in case the client disconnection was not proper done
 			*/
-			//deleteUnsetSessions();
 			std::map<int,edSession*>::iterator it = sessions.begin();
 			while(it != sessions.end())
 			{
@@ -149,7 +145,6 @@ void tcpClient::run(void *param){
 			 * mark the existing sessions as orphan
 			 * in case the client disconnection was not proper done
 			*/
-			//deleteUnsetSessions();
 			std::map<int,edSession*>::iterator it = sessions.begin();
 			while(it != sessions.end())
 			{
@@ -189,11 +184,10 @@ void tcpClient::sendKeepAlive(void *param){
                 break;
             }
             if (sessions.size() == 0){
-                //logger->debug("[%d] Keep alive 0 sessions",id);
                 clock_gettime(CLOCK_REALTIME,&spec);
                 t = edsession->getEDTime();
                 millis = elapsed_millis(spec, t);
-                //millis = spec.tv_sec*1000 + spec.tv_nsec/1.0e6 - t.tv_sec*1000 - t.tv_nsec/1.0e6;
+
                 if (millis > ED_KEEP_ALIVE ){
                     //send to ED
                     logger->debug("[%d] [tcpClient] Send ED keep alive",id);
@@ -203,15 +197,15 @@ void tcpClient::sendKeepAlive(void *param){
                 }
             }
             else{
-                //logger->debug("[%d] Keep alive %d sessions",id,sessions.size());
+
                 std::map<int,edSession*>::iterator it = sessions.begin();
                 while(it != sessions.end())
                 {
-                    //logger->debug("[%d] Keep alive %d loco",id,it->second->getLoco());
+
                     clock_gettime(CLOCK_REALTIME,&spec);
                     t = it->second->getEDTime();
                     millis = elapsed_millis(spec, t);
-                    //millis = spec.tv_sec*1000 + spec.tv_nsec/1.0e6 - t.tv_sec*1000 - t.tv_nsec/1.0e6;
+
                     if (millis > ED_KEEP_ALIVE ){
                         it->second->setEDTime(spec);
                         //send to ED
@@ -222,7 +216,7 @@ void tcpClient::sendKeepAlive(void *param){
                     if (it->second->getLoco()>-1){
                         t = it->second->getCbusTime();
                         millis = elapsed_millis(spec, t);
-                        //millis = spec.tv_sec*1000 + spec.tv_nsec/1.0e6 - t.tv_sec*1000 - t.tv_nsec/1.0e6;
+
                         if (millis > CBUS_KEEP_ALIVE ){
                             it->second->setCbusTime(spec);
                             //send keep alive
@@ -230,11 +224,7 @@ void tcpClient::sendKeepAlive(void *param){
                             sendCbusMessage(OPC_DKEEP,it->second->getSession());
                         }
                     }
-					/*
-                    else{
-                        logger->debug("[%d] [tcpClient] Loco not set keep alive",id);
-                    }
-					*/
+
                     it++;
                 }
             }
@@ -255,7 +245,6 @@ void tcpClient::handleEDMessages(char* msgptr){
     try{
         msgs = split(message,'\n', msgs);
 
-        //vector<string>::iterator it = msgs.begin();
         for (auto const& msg:msgs){
             logger->debug("[%d] [tcpClient] Handle message:%s",id,msg.c_str());
 
@@ -377,7 +366,6 @@ void tcpClient::handleEDMessages(char* msgptr){
         }
     }
     catch(const runtime_error &ex){
-        //throw_line(ex.what());
         logger->debug("[tcpClient] Not runtime error cought. %s",ex.what() );
         cout << "[tcpClient] Not runtime error cought" << ex.what() << endl;
     }
@@ -434,7 +422,6 @@ void tcpClient::ackEDSessionCreated(edSession *ed, bool sendSpeedMode){
 	ss << "M"; ss << stype ; ss <<"L" ; ss << ed->getAddressType();
 	ss << ed->getLoco();
 	ss << EMPTY_LABELS;
-	//ss << "S";
 	ss << generateFunctionsLabel(ed->getLoco(), stype, ed->getAddressType());
 	ss << '\n';
 
@@ -455,31 +442,36 @@ void tcpClient::ackEDSessionCreated(edSession *ed, bool sendSpeedMode){
 
 void tcpClient::processCbusQueue(void *param){
     struct can_frame frame;
-    char buf[30];
+    char buf[100];
     logger->debug("[%d] [tcpClient] Tcp Client cbus thread read cbus queue",id);
     while (running){
-        if (!in_msgs.empty()){
-            //pthread_mutex_lock(&m_mutex_in_cli);
+
+        pthread_mutex_lock(&m_mutex_in_cli);
+        pthread_cond_wait(&m_condv_in_cli, &m_mutex_in_cli);
+
+        if (in_msgs.empty()){
+            pthread_mutex_unlock(&m_mutex_in_cli);
+        }
+        else{
+
             frame = in_msgs.front();
             in_msgs.pop();
-            //pthread_mutex_unlock(&m_mutex_in_cli);
-            //pthread_cond_signal(&m_condv_in_cli);
+            pthread_mutex_unlock(&m_mutex_in_cli);
+
             try{
                 memset(buf,0,sizeof(buf));
                 sprintf(buf,"%02x %02x %02x %02x %02x %02x %02x %02x\n", frame.data[0],frame.data[1],frame.data[2],frame.data[3],frame.data[4],frame.data[5],frame.data[6],frame.data[7]);
                 logger->debug("[%d] [tcpClient] Tcp Client received cbus message: %s",id,buf);
-                //cout << "#######@@@###@#@###@" << endl;
                 handleCBUS(frame.data);
             }
             catch(runtime_error &ex){
                 logger->debug("[%d] [tcpClient] Failed to process the can message",id);
-                //throw_line("Failed to process the can message");
             }
             catch(...){
                 logger->debug("[%d] [tcpClient] Failed to process the can message",id);
             }
         }
-        usleep(4000);
+        //usleep(4000);
     }
 }
 
@@ -526,9 +518,6 @@ void tcpClient::handleCBUS(unsigned char *msg){
 
             //create new edsession object
 			edsession = session_handler->createEDSession(id,string(""),this->client_addr.sin_addr.s_addr);
-            //edsession = new edSession(logger,0);
-            //edsession->setNodeConfigurator(config);
-            //edsession->getMomentaryFNs();
 
             setStartSessionTime();
         break;
@@ -693,7 +682,7 @@ void tcpClient::handleReleaseSession(string message){
         }
         //clear sessions
 
-        usleep(1000*500);//300ms
+        usleep(1000*500);//500ms
         it = this->sessions.begin();
         logger->info("[%d] [tcpClient] Dealocating sessions" ,id);
         while(it != this->sessions.end())
@@ -703,7 +692,6 @@ void tcpClient::handleReleaseSession(string message){
 					logger->info("[%d] [tcpClient] Dealocating loco %d" ,id, it->second->getLoco());
 				}
 				session_handler->deleteEDSession(it->second->getSessionUid());
-                //delete(it->second);
                 sessions.erase(it);
             }
             it++;
@@ -728,10 +716,9 @@ void tcpClient::handleReleaseSession(string message){
 			sesid = this->sessions[loco]->getSession();
 			//send the can data
 			sendCbusMessage(OPC_KLOC,sesid);
-			usleep(1000*200);//300ms
+			usleep(1000*200);//200ms
 		}
 		session_handler->deleteEDSession(sessions[loco]->getSessionUid());
-        //delete(this->sessions[loco]);
         this->sessions.erase(loco);
     }
     else logger->debug("[%d] [tcpClient] Loco %d not allocated" ,id,loco);
@@ -764,7 +751,7 @@ void tcpClient::releaseAllSessions(){
 
 	//clear sessions
 
-	usleep(1000*500);//300ms
+	usleep(1000*500);//500ms
 	it = this->sessions.begin();
 	logger->info("[%d] [tcpClient] Dealocating sessions" ,id);
 	while(it != this->sessions.end())
@@ -773,7 +760,6 @@ void tcpClient::releaseAllSessions(){
 			logger->info("[%d] [tcpClient] Dealocating loco %d" ,id, it->second->getLoco());
 		}
 		session_handler->deleteEDSession(it->second->getSessionUid());
-		//delete(it->second);
 		sessions.erase(it);
 		it++;
 	}
@@ -795,17 +781,7 @@ void tcpClient::releaseActualSession(){
 
 void tcpClient::deleteUnsetSessions(){
 	logger->debug("[%d] [tcpClient] Deleting all unset sessions",id);
-/*
-	if (!edsession->isSessionSet()){
-        logger->info("[%d] [tcpClient] Deleting actual unset session %d" ,id, edsession->getClientId());
 
-        if (sessions.find(edsession->getLoco()) != sessions.end()){
-            sessions.erase(edsession->getLoco());
-        }
-
-        session_handler->deleteEDSession(edsession->getSessionUid());
-	}
-*/
 	std::map<int,edSession*>::iterator it = this->sessions.begin();
 
 	while(it != this->sessions.end())
@@ -821,7 +797,6 @@ void tcpClient::deleteUnsetSessions(){
 }
 
 void tcpClient::handleDirection(string message){
-    //const char* msg = message.c_str();
 
     logger->debug("[%d] [tcpClient] Handle Direction request %s",id, message.c_str());
     sendToEd(message + "\n");
@@ -936,8 +911,6 @@ void tcpClient::handleSpeed(string message){
         ss << session->getLoco();
         ss << DELIM_BTLT;
         ss << "V";
-        //if (session->getSpeed() == 1) ss << "0";
-        //else ss << (int)session->getSpeed();
         ss << edspeed;
         ss << "\n";
 
@@ -989,12 +962,9 @@ void tcpClient::handleIdle(string message){
         ss << session->getLoco();
         ss << DELIM_BTLT;
         ss << "V";
-        //if (session->getSpeed() == 1) ss << "0";
-        //else ss << (int)session->getSpeed();
         ss << edspeed;
         ss << "\n";
 
-        //sendToEd(ss.str());
         usleep(1000*10);//wait 10ms
     }
     else logger->debug("[%d] [tcpClient] Loco %d not allocated" ,id,loco);
@@ -1069,8 +1039,6 @@ void tcpClient::handleQuerySpeed(string message){
                 ss << it->second->getLoco();
                 ss << DELIM_BTLT;
                 ss << "V";
-                //if (it->second->getSpeed() == 1) ss << "0";
-                //else ss << (int)it->second->getSpeed();
                 ss << (int)it->second->getSpeed();
                 ss << "\n";
             }
@@ -1092,8 +1060,6 @@ void tcpClient::handleQuerySpeed(string message){
         ss << session->getLoco();
         ss << DELIM_BTLT;
         ss << "V";
-        //if (session->getSpeed() == 1) ss << "0";
-        //else ss << (int)session->getSpeed();
         ss << (int)session->getSpeed();
         ss << "\n";
         sendToEd(ss.str());

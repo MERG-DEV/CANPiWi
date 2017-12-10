@@ -62,7 +62,7 @@ void canHandler::setPins(int pbutton,int gledpin,int yledpin){
     pb.setdir_gpio("in");
     gl.setdir_gpio("out");
     yl.setdir_gpio("out");
-    if (config->getNodeMode() == 0){
+    if (config->getNodeMode() == MTYP_SLIM){
         logger->info("[canHandler] Node is in SLIM mode");
     	gl.setval_gpio("1");
 	yl.setval_gpio("0");
@@ -129,14 +129,6 @@ int canHandler::put_to_out_queue(int canid,char *msg,int msize,CLIENT_TYPE ct){
     int j = CAN_MSG_SIZE;
     struct can_frame frame;
 
-    /*
-    if (msize == 0){
-        if (canid != CAN_RTR_FLAG){
-            logger->debug("Can message with size 0 and not RTR. Discarding");
-            return 0;
-        }
-    }
-    */
     if (msize < CAN_MSG_SIZE){
         j = msize;
     }
@@ -153,11 +145,11 @@ int canHandler::put_to_out_queue(int canid,char *msg,int msize,CLIENT_TYPE ct){
     frameCAN canframe = frameCAN(frame,ct);
 
     pthread_mutex_lock(&m_mutex);
-    //out_msgs.push(frame);
+
     out_msgs.push(canframe);
 
-    pthread_mutex_unlock(&m_mutex);
     pthread_cond_signal(&m_condv);
+    pthread_mutex_unlock(&m_mutex);
 
     //send to can grid server
     vector<tcpServer*>::iterator server;
@@ -170,7 +162,6 @@ int canHandler::put_to_out_queue(int canid,char *msg,int msize,CLIENT_TYPE ct){
     }
     else{
         print_frame(&frame,"[canHandler] Servers empty or client type is GRID. Not sendind to GRID.");
-        //logger->debug("[canHandler] Servers empty or client type is GRID. Not sendind to GRID.");
     }
 
     return j;
@@ -205,11 +196,11 @@ int canHandler::put_to_incoming_queue(int canid,char *msg,int msize,CLIENT_TYPE 
 
     pthread_mutex_lock(&m_mutex_in);
 
-    //in_msgs.push(frame);
     in_msgs.push(canframe);
 
-    pthread_mutex_unlock(&m_mutex_in);
     pthread_cond_signal(&m_condv_in);
+    pthread_mutex_unlock(&m_mutex_in);
+
 
     return j;
 }
@@ -248,6 +239,9 @@ int canHandler::start(const char* interface){
 
 	logger->debug("[canHandler] Starting the queue writer thread");
 	pthread_create(&queueWriter,nullptr,canHandler::thread_entry_out,this);
+
+	logger->debug("[canHandler] Starting the push button thread");
+	pthread_create(&pbLogic,nullptr,canHandler::thread_entry_pb_logic,this);
 
 	return canInterface;
 }
@@ -336,7 +330,6 @@ void canHandler::run_in(void* param){
         msg.msg_controllen = sizeof(ctrlmsg);
         msg.msg_flags = 0;
 
-        //nbytes = read(canInterface, &frame, sizeof(frame));
         nbytes = recvmsg(canInterface, &msg , 0);
         if (nbytes < 0)
         {
@@ -345,10 +338,9 @@ void canHandler::run_in(void* param){
         else{
             frameCAN canframe = frameCAN(frame,CLIENT_TYPE::CBUS);
             pthread_mutex_lock(&m_mutex_in);
-            //in_msgs.push(frame);
             in_msgs.push(canframe);
-            pthread_mutex_unlock(&m_mutex_in);
             pthread_cond_signal(&m_condv_in);
+            pthread_mutex_unlock(&m_mutex_in);
         }
     }
     logger->debug("[canHandler] Shutting down the CBUS socket");
@@ -373,9 +365,14 @@ void canHandler::run_queue_reader(void* param){
 
     while (running){
 
-        if (!in_msgs.empty()){
-            pthread_mutex_lock(&m_mutex_in);
-            //frame = in_msgs.front();
+        /* block this thread until another there is something in the queue. */
+        pthread_mutex_lock(&m_mutex_in);
+        pthread_cond_wait( &m_condv_in, & m_mutex_in );
+
+        if (in_msgs.empty()){
+            pthread_mutex_unlock(&m_mutex_in);
+        }
+        else {
             canframe = in_msgs.front();
             in_msgs.pop();
             pthread_mutex_unlock(&m_mutex_in);
@@ -390,12 +387,6 @@ void canHandler::run_queue_reader(void* param){
                 print_frame(&frame,"[canHandler] Received standard frame");
             }
 
-            //finish auto enum
-            if (auto_enum_mode && stdframe){
-                if (frame.can_dlc == 0){
-                    finishSelfEnum(frame.can_id);
-                }
-            }
             /*
             * Check if some other node is doing auto enum
             * and answer with out canid
@@ -441,7 +432,6 @@ void canHandler::run_queue_reader(void* param){
                         }
                         else{
                             print_frame(&frame,"[canHandler] Droping message from GRID to GRID");
-                            //logger->debug("[canHandler] Droping message from GRID to GRID");
                         }
                     }
                     else{
@@ -451,36 +441,8 @@ void canHandler::run_queue_reader(void* param){
                 }
             }
         }
-        //check button pressed
-        //finish auto enum
-        if (auto_enum_mode){
-            finishSelfEnum(0);
 
-            if (!auto_enum_mode){
-
-                if (!soft_auto_enum){
-
-                    //send RQNN
-                    char sendframe[CAN_MSG_SIZE];
-                    memset(sendframe,0,CAN_MSG_SIZE);
-
-                    byte Lb,Hb;
-                    Lb = node_number & 0xff;
-                    Hb = (node_number >> 8) & 0xff;
-                    logger->info("[canHandler] Doing request node number afer auto enum. Entering in setup mode");
-
-                    sendframe[0]=OPC_RQNN;
-                    sendframe[1] = Hb;
-                    sendframe[2] = Lb;
-                    setup_mode = true;
-                    put_to_out_queue(sendframe,3,CLIENT_TYPE::ED);
-                }
-                else soft_auto_enum = false;
-             }
-
-        }
-        doPbLogic();
-        usleep(3000);
+        //usleep(3000);
     }
     logger->debug("[canHandler] Stopping the queue reader");
 }
@@ -512,9 +474,10 @@ void canHandler::run_out(void* param){
     while (running){
         if (!out_msgs.empty()){
             pthread_mutex_lock(&m_mutex);
-            //frame = out_msgs.front();
+
             canframe = out_msgs.front();
             out_msgs.pop();
+
             pthread_mutex_unlock(&m_mutex);
             frame = canframe.getFrame();
 
@@ -524,7 +487,7 @@ void canHandler::run_out(void* param){
             }
             nbytes = write(canInterface, &frame, CAN_MTU);
             print_frame(&frame,"[canHandler] Sent [" + to_string(nbytes) + "]");
-            //logger->debug("Sent %d bytes to CBUS",nbytes);
+
             if (nbytes != CAN_MTU){
                 logger->debug("[canHandler] Problem on sending the CBUS, bytes transfered %d, supposed to transfer %d", nbytes, CAN_MTU);
             }
@@ -661,12 +624,6 @@ void canHandler::handleCBUSEvents(frameCAN canframe){
         Hb = frame.data[1];
         tnn = Hb;
         tnn = (tnn << 8) | Lb;
-
-        /*
-        if (tnn != node_number){
-            logger->debug("[canHandler] RQNP is for another node. My nn: %d received nn: %d", node_number,tnn);
-            return;
-        }*/
 
         logger->debug("[canHandler] Sending response for RQNP.");
         sendframe[0] = OPC_PARAMS;
@@ -991,7 +948,7 @@ void canHandler::restart_module(SCRIPT_ACTIONS action){
             (*server)->stop();
         }
     }
-    usleep(1000*1000);
+    usleep(1000*1000);//1s
     if(fork() == 0){
         logger->info("[canHandler] Restarting the module. [%s]", command.c_str());
         system(command.c_str());
@@ -1005,117 +962,134 @@ void canHandler::restart_module(SCRIPT_ACTIONS action){
  * @brief Handles the push button behaviour
  */
 
-void canHandler::doPbLogic(){
+void canHandler::run_pb_logic(void* param){
     string pbstate;
     string ledstate;
+    char sendframe[CAN_MSG_SIZE];
+    byte Lb,Hb;
 
-    if (blinking){
-        if (((time(0)*1000) - ledtime) > BLINK_INTERVAL){
-            yl.getval_gpio(ledstate);
-            if (ledstate == "0"){
-                yl.setval_gpio("1");
+    while (running){
+
+        //finish auto enum
+        if (auto_enum_mode){
+            finishSelfEnum(0);
+            if (!auto_enum_mode){
+                if (config->getNodeMode() == MTYP_FLIM){
+                    //send RQNN
+                    memset(sendframe,0,CAN_MSG_SIZE);
+                    Lb = node_number & 0xff;
+                    Hb = (node_number >> 8) & 0xff;
+                    logger->info("[canHandler] Doing request node number afer auto enum. Entering in setup mode");
+
+                    sendframe[0]=OPC_RQNN;
+                    sendframe[1] = Hb;
+                    sendframe[2] = Lb;
+                    setup_mode = true;
+                    put_to_out_queue(sendframe,3,CLIENT_TYPE::ED);
+
+                }
+                else soft_auto_enum = false;
+             }
+        }
+
+        if (blinking){
+            if (((time(0)*1000) - ledtime) > BLINK_INTERVAL){
+                yl.getval_gpio(ledstate);
+                if (ledstate == "0"){
+                    yl.setval_gpio("1");
+                }
+                else{
+                    yl.setval_gpio("0");
+                }
+                ledtime = time(0) * 1000;
+            }
+        }
+
+        pb.getval_gpio(pbstate);
+        if (pbstate == "0"){
+            //button pressed
+            if (!pb_pressed){
+                //button was not pressed. start timer
+                nnPressTime = time(0)*1000;
+                pb_pressed = true;
+                logger->debug("[canHandler] Button pressed. Timer start %le",nnPressTime );
             }
             else{
-                yl.setval_gpio("0");
+                ledtime = time(0)*1000;
+                if (((ledtime - nnPressTime) >= NN_PB_TIME) && !blinking){
+                    blinking = true;
+                    gl.setval_gpio("1");
+                }
             }
-            ledtime = time(0) * 1000;
+            continue;//back to the loop
         }
-    }
 
-    pb.getval_gpio(pbstate);
-    if (pbstate == "0"){
-        //button pressed
-        //logger->debug("Button pressed.");
-        if (!pb_pressed){
-            //button was not pressed. start timer
-            nnPressTime = time(0)*1000;
-            pb_pressed = true;
-            logger->debug("[canHandler] Button pressed. Timer start %le",nnPressTime );
-        }
-        else{
-            ledtime = time(0)*1000;
-            if (((ledtime - nnPressTime) >= NN_PB_TIME) && !blinking){
-                blinking = true;
-                gl.setval_gpio("1");
+
+        //button was pressed and now released
+        if (pb_pressed){
+            nnReleaseTime = time(0)*1000;
+            pb_pressed = false;
+            logger->debug("[canHandler] Button released. Timer end [%le] difference [%lf]",nnReleaseTime, nnReleaseTime - nnPressTime );
+
+            memset(sendframe,0,CAN_MSG_SIZE);
+
+            Lb = node_number & 0xff;
+            Hb = (node_number >> 8) & 0xff;
+
+            //check if node number request
+            if ((nnReleaseTime - nnPressTime) >= NN_PB_TIME){
+
+                if (config->getNodeMode() == MTYP_FLIM){//change from FLIM to SSLIM
+                    logger->info("Node was in FLIM. Setting to SLIM");
+                    config->setNodeMode(MTYP_SLIM); //SLIM
+                    gl.setval_gpio("1");
+                    yl.setval_gpio("0");
+
+                    sendframe[0] = OPC_NNREL;
+                    sendframe[1] = Hb;
+                    sendframe[2] = Lb;
+                    setup_mode = false;
+                    blinking = false;
+                    put_to_out_queue(sendframe, 3, CLIENT_TYPE::ED);
+                    node_number = DEFAULT_NN;
+                    config->setNodeNumber(DEFAULT_NN);
+                    continue;
+
+               }
+
+                //send RQNN
+                logger->info("[canHandler] Doing request node number. Entering in setup mode");
+
+                sendframe[0]=OPC_RQNN;
+                sendframe[1] = Hb;
+                sendframe[2] = Lb;
+                setup_mode = true;
+                put_to_out_queue(sendframe, 3, CLIENT_TYPE::ED);
+                continue;
             }
-        }
-        return;
-    }
 
-    //button was pressed and now released
-    if (pb_pressed){
-        nnReleaseTime = time(0)*1000;
-        pb_pressed = false;
-        logger->debug("[canHandler] Button released. Timer end [%le] difference [%lf]",nnReleaseTime, nnReleaseTime - nnPressTime );
-
-        char sendframe[CAN_MSG_SIZE];
-        memset(sendframe,0,CAN_MSG_SIZE);
-
-        byte Lb,Hb;
-        Lb = node_number & 0xff;
-        Hb = (node_number >> 8) & 0xff;
-
-        //check if node number request
-        if ((nnReleaseTime - nnPressTime) >= NN_PB_TIME){
-
-            if (config->getNodeMode() == 1){//change from FLIM to SSLIM
-                logger->info("Node was in FLIM. Setting to SLIM");
-            	config->setNodeMode(0); //SLIM
-            	gl.setval_gpio("1");
-            	yl.setval_gpio("0");
-
-            	sendframe[0] = OPC_NNREL;
-            	sendframe[1] = Hb;
-            	sendframe[2] = Lb;
-            	setup_mode = false;
+            //check if auto enum request
+            if ((nnReleaseTime - nnPressTime) >= AENUM_PB_TIME){
+                doSelfEnum();
+                continue;
+            }
+            if (setup_mode || blinking){
+                logger->debug("[canHandler] Leaving setup modeCAN");
+                setup_mode = false;
                 blinking = false;
-            	put_to_out_queue(sendframe, 3, CLIENT_TYPE::ED);
-            	node_number = DEFAULT_NN;
-            	config->setNodeNumber(DEFAULT_NN);
-            	return;
-
-           }
-
-
-            //send RQNN
-            logger->info("[canHandler] Doing request node number. Entering in setup mode");
-
-            sendframe[0]=OPC_RQNN;
-            sendframe[1] = Hb;
-            sendframe[2] = Lb;
-            setup_mode = true;
-            put_to_out_queue(sendframe, 3, CLIENT_TYPE::ED);
-            return;
+                if (config->getNodeMode() == MTYP_FLIM ) { //FLIM
+                    gl.setval_gpio("0");
+                    yl.setval_gpio("1");
+                    logger->info("Node in FLIM mode");
+                }
+                else{
+                    gl.setval_gpio("1");
+                    yl.setval_gpio("0");
+                    logger->info("Node in SLIM mode");
+                }
+            }
         }
-        //check if auto enum request
-        if ((nnReleaseTime - nnPressTime) >= AENUM_PB_TIME){
-            doSelfEnum();
-             //send RQNN
-            /*
-            logger->info("[canHandler] Doing request node number. Entering in setup mode");
-
-            sendframe[0]=OPC_RQNN;
-            sendframe[1] = Hb;
-            sendframe[2] = Lb;
-            setup_mode = true;
-            put_to_out_queue(sendframe, 3, CLIENT_TYPE::ED);
-            */
-            return;
-        }
-        if (setup_mode || blinking){
-            logger->debug("[canHandler] Leaving setup modeCAN");
-            setup_mode = false;
-            blinking = false;
-            if (config->getNodeMode() == 1 ) { //FLIM
-            	gl.setval_gpio("0");
-            	yl.setval_gpio("1");
-            	logger->info("Setting to FLIM");
-	    }
-	    else{
-            	gl.setval_gpio("1");
-            	yl.setval_gpio("0");
-            	logger->info("Setting to SLIM");
-	    }
-        }
+        usleep(100*1000); //100ms
     }
+    logger->debug("[canHandler] Stopping the push button handler");
 }

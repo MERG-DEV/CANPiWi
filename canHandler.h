@@ -63,10 +63,9 @@ class canHandler
         pthread_t cbusReader;
         pthread_t queueReader;
         pthread_t queueWriter;
+        pthread_t pbLogic;
         tcpServer *tcpserver;
         vector<tcpServer*> servers;
-        //std::queue<can_frame> in_msgs;
-        //std::queue<can_frame> out_msgs;
         std::queue<frameCAN> in_msgs;
         std::queue<frameCAN> out_msgs;
         bool auto_enum_mode = false;
@@ -100,11 +99,11 @@ class canHandler
         void run_in(void* param);
         void run_out(void* param);
         void run_queue_reader(void* param);
+        void run_pb_logic(void* param);
         void doSelfEnum();
         void finishSelfEnum(int id);
-        //void handleCBUSEvents(struct can_frame frame);
         void handleCBUSEvents(frameCAN frame);
-        void doPbLogic();
+
         void restart_module(SCRIPT_ACTIONS action);
 
         void print_frame(can_frame *frame,string message);
@@ -119,6 +118,11 @@ class canHandler
         }
         static void* thread_entry_in_reader(void *classPtr){
             ((canHandler*)classPtr)->run_queue_reader(nullptr);
+            return nullptr;
+        }
+
+        static void* thread_entry_pb_logic(void *classPtr){
+            ((canHandler*)classPtr)->run_pb_logic(nullptr);
             return nullptr;
         }
 };
