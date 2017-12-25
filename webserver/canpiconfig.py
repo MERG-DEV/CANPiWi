@@ -154,10 +154,12 @@ desc_shutdown_code="Shutdown code"
 desc_edserver_code="Enable Engine Drive tcp server"
 
 #validators
+wifipasslength=40
+wifissidlength=40
 ssid_length = form.Validator("SSID length should be between 1 and 8 characters", lambda p: p is None or len(p)>8)
 passwd_length = form.Validator("Password length should be 8 characters", lambda p: len(p)!= 8)
-router_ssid_length = form.Validator("Router SSID length should be between 1 and 12 characters", lambda p: p is None or len(p)>12)
-router_passwd_length = form.Validator("Router password length should be less then 12 characters", lambda p: len(p)> 12)
+router_ssid_length = form.Validator("Router SSID length should be between 1 and %d characters" % wifissidlength , lambda p: p is None or len(p)>wifissidlength)
+router_passwd_length = form.Validator("Router password length should be less then %d characters" % wifipasslength, lambda p: len(p)> wifipasslength)
 turnout_length = form.Validator("Turnout name length should less than 11 characters", lambda p: p is None or len(p)>11)
 service_name_length = form.Validator("Service name length should less than 8 characters", lambda p: p is None or len(p)>8)
 
@@ -295,10 +297,10 @@ class index:
             if len(form[id_password].value) != 8 and form[id_apmode_no_passwd].checked == False:
                 return False, "Password length should be 8 characters"
         else:
-            if len(form[id_router_ssid].value) > 12 or len(form[id_router_ssid].value) == 0 :
-                return False, "Router SSID length should be between 1 and 12 characters"
-            if len(form[id_router_password].value) == 0 or len(form[id_router_password].value) > 12 :
-                return False, "Router password length should be less then 12 characters"
+            if len(form[id_router_ssid].value) > wifissidlength or len(form[id_router_ssid].value) == 0 :
+                return False, "Router SSID length should be between 1 and %d characters" % wifissidlength
+            if len(form[id_router_password].value) == 0 or len(form[id_router_password].value) > wifipasslength :
+                return False, "Router password length should be less then %d characters" % wifipasslength
 
         if self.isint(form[id_canid].value):
             v = int(form[id_canid].value)

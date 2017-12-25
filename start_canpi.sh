@@ -432,6 +432,22 @@ stop_canpi(){
         echo
 
         if is_running; then
+            echo "Terminating the service"
+            
+            kill -9 `get_pid`
+            for i in {1..10}
+            do
+              if ! is_running; then
+                 break
+              fi
+
+              echo -n "."
+              sleep 1
+            done
+            echo
+         fi
+
+        if is_running; then
             echo "Not stopped; may still be shutting down or shutdown may have failed"
             return 1
         else
