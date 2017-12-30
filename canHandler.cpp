@@ -472,27 +472,34 @@ void canHandler::run_out(void* param){
     logger->debug("[canHandler] Running CBUS queue writer");
 
     while (running){
-        if (!out_msgs.empty()){
-            pthread_mutex_lock(&m_mutex);
 
-            canframe = out_msgs.front();
-            out_msgs.pop();
+        pthread_mutex_lock(&m_mutex);
+        pthread_cond_wait( &m_condv, & m_mutex );
 
+        if (out_msgs.empty()){
             pthread_mutex_unlock(&m_mutex);
-            frame = canframe.getFrame();
-
-            if (cbus_stopped){
-                logger->warn("[canHandler] CBUS stopped. Discarding outgoing message");
-                continue;
-            }
-            nbytes = write(canInterface, &frame, CAN_MTU);
-            print_frame(&frame,"[canHandler] Sent [" + to_string(nbytes) + "]");
-
-            if (nbytes != CAN_MTU){
-                logger->debug("[canHandler] Problem on sending the CBUS, bytes transfered %d, supposed to transfer %d", nbytes, CAN_MTU);
-            }
         }
-        usleep(3000);
+        else {
+            //consume all the messages
+            while (!out_msgs.empty()){
+                canframe = out_msgs.front();
+                out_msgs.pop();
+
+                frame = canframe.getFrame();
+
+                if (cbus_stopped){
+                    logger->warn("[canHandler] CBUS stopped. Discarding outgoing message");
+                    continue;
+                }
+                nbytes = write(canInterface, &frame, CAN_MTU);
+                print_frame(&frame,"[canHandler] Sent [" + to_string(nbytes) + "]");
+
+                if (nbytes != CAN_MTU){
+                    logger->debug("[canHandler] Problem on sending the CBUS, bytes transfered %d, supposed to transfer %d", nbytes, CAN_MTU);
+                }
+            }
+            pthread_mutex_unlock(&m_mutex);
+        }
     }
     logger->debug("[canHandler] Stopping the queue writer");
 }
