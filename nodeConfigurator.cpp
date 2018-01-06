@@ -696,7 +696,7 @@ int nodeConfigurator::getcanGridPort(){
             if (logger != nullptr) logger->error("Failed to get the grid tcp port. Default is 31");
             else cout << "Failed to get the grid tcp port. Default is 31" << endl;
         }
-        ret = 4444;
+        ret = 5550;
     }
     return ret;
 }

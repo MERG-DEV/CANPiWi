@@ -46,7 +46,7 @@ create_default_canpi_config(){
   echo "candevice=\"can0\"" >> $conf
   echo "#cangrid config" >> $conf
   echo "can_grid=\"true\"" >> $conf
-  echo "cangrid_port=4444" >> $conf
+  echo "cangrid_port=5550" >> $conf
   echo "#Bonjour config" >> $conf
   echo "service_name=\"MYLAYOUT\"" >> $conf
   echo "#network config" >> $conf

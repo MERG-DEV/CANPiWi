@@ -67,12 +67,12 @@ int main()
     string logfile = "canpi.log";
     string configfile = "canpi.cfg";
     string turnoutfile = "turnout.txt";
-    int port = 4444;
+    int port = 5555;
     string candevice = "can0";
     bool append = false;
     bool start_grid_server = false;
     bool start_ed_server = false;
-    int gridport = 5555;
+    int gridport = 5550;
     int canid = 100;
     int pb_pin=4;
     int gled_pin=18;

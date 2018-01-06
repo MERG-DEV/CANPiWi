@@ -93,75 +93,79 @@ class configManager:
 cm = configManager()
 cm.readConfig()
 
-id_apmode="apmode"
-id_apmode_no_passwd="ap_no_password"
-id_ssid="ap_ssid"
-id_password="ap_password"
-id_channel="ap_channel"
-id_router_ssid="router_ssid"
-id_router_password="router_password"
-id_bonjour_name="service_name"
-id_ed_tcpport="tcpport"
-id_grid_enable="gridenable"
-id_grid_port="cangrid_port"
-id_logfile="logfile"
-id_loglevel="loglevel"
-id_logappend="logappend"
-id_canid="canid"
-id_turnout_file="turnout_file"
-id_fns_momentary="fn_momentary"
-id_create_logfile="create_log_file"
-id_start_event_id="start_event_id"
-id_btn_save="btnSave"
-id_btn_apply="btnApply"
-id_btn_restart="btnRestart"
-id_btn_stop="btnStop"
-id_btn_restart_all="btnRestartAll"
-id_btn_update_file="btnUpdateFile"
-id_btn_shutdown="btnShutdown"
-id_orphan_timeout="orphan_timeout"
-id_shutdown_code="shutdown_code"
-id_edserver="edserver"
+id_apmode = "apmode"
+id_apmode_no_passwd = "ap_no_password"
+id_ssid = "ap_ssid"
+id_password = "ap_password"
+id_channel = "ap_channel"
+id_router_ssid = "router_ssid"
+id_router_password = "router_password"
+id_bonjour_name = "service_name"
+id_ed_tcpport = "tcpport"
+id_grid_enable = "gridenable"
+id_grid_port = "cangrid_port"
+id_logfile = "logfile"
+id_loglevel = "loglevel"
+id_logappend = "logappend"
+id_canid = "canid"
+id_turnout_file = "turnout_file"
+id_fns_momentary = "fn_momentary"
+id_create_logfile = "create_log_file"
+id_start_event_id = "start_event_id"
+id_btn_save = "btnSave"
+id_btn_apply = "btnApply"
+id_btn_restart = "btnRestart"
+id_btn_stop = "btnStop"
+id_btn_restart_all = "btnRestartAll"
+id_btn_update_file = "btnUpdateFile"
+id_btn_shutdown = "btnShutdown"
+id_orphan_timeout = "orphan_timeout"
+id_shutdown_code = "shutdown_code"
+id_edserver = "edserver"
 
-desc_apmode="AP mode"
-desc_apmode_no_passwd="No password in AP mode"
-desc_ssid="SSID"
-desc_password="Password"
-desc_channel="Channel"
-desc_router_ssid="Router SSID"
-desc_router_password="Router Password"
-desc_bonjour_name="Bonjour service name"
-desc_ed_tcpport="ED Throttle Service port"
-desc_grid_enable="Cangrid enable"
-desc_grid_port="Grid connect Service port"
-desc_logfile="Logfile"
-desc_logappend="Append log"
-desc_loglevel="Log Level"
-desc_canid="Can ID"
-desc_turnout_file="Turnouts"
-desc_fns_momentary="Fns momentary"
-desc_create_logfile="Creates log file"
-desc_start_event="Start event id"
-desc_btn_save="btnSave"
-desc_btn_apply="btnApply"
-desc_btn_restart="btnRestart"
-desc_btn_stop="btnStop"
-desc_btn_restart_all="btnRestartAll"
-desc_btn_update_file="btnUpdateFile"
-desc_btn_shutdown="btnShutdown"
-desc_orphan_timeout="Orphan sessions timeout seconds"
-desc_shutdown_code="Shutdown code"
-desc_edserver_code="Enable Engine Drive tcp server"
+desc_apmode = "AP mode"
+desc_apmode_no_passwd = "No password in AP mode"
+desc_ssid = "SSID"
+desc_password = "Password"
+desc_channel = "Channel"
+desc_router_ssid = "Router SSID"
+desc_router_password = "Router Password"
+desc_bonjour_name = "Bonjour service name"
+desc_ed_tcpport = "ED Throttle Service port"
+desc_grid_enable = "Cangrid enable"
+desc_grid_port = "Grid connect Service port"
+desc_logfile = "Logfile"
+desc_logappend = "Append log"
+desc_loglevel = "Log Level"
+desc_canid = "Can ID"
+desc_turnout_file = "Turnouts"
+desc_fns_momentary = "Fns momentary"
+desc_create_logfile = "Creates log file"
+desc_start_event = "Start event id"
+desc_btn_save = "btnSave"
+desc_btn_apply = "btnApply"
+desc_btn_restart = "btnRestart"
+desc_btn_stop = "btnStop"
+desc_btn_restart_all = "btnRestartAll"
+desc_btn_update_file = "btnUpdateFile"
+desc_btn_shutdown = "btnShutdown"
+desc_orphan_timeout = "Orphan sessions timeout seconds"
+desc_shutdown_code = "Shutdown code"
+desc_edserver_code = "Enable Engine Drive tcp server"
 
 #validators
-wifipasslength=40
-wifissidlength=40
-ssid_length = form.Validator("SSID length should be between 1 and 8 characters", lambda p: p is None or len(p)>8)
-passwd_length = form.Validator("Password length should be 8 characters", lambda p: len(p)!= 8)
-router_ssid_length = form.Validator("Router SSID length should be between 1 and %d characters" % wifissidlength , lambda p: p is None or len(p)>wifissidlength)
-router_passwd_length = form.Validator("Router password length should be less then %d characters" % wifipasslength, lambda p: len(p)> wifipasslength)
-turnout_length = form.Validator("Turnout name length should less than 11 characters", lambda p: p is None or len(p)>11)
-service_name_length = form.Validator("Service name length should less than 8 characters", lambda p: p is None or len(p)>8)
+wifipasslength = 40
+wifissidlength = 40
+passlength = 8
+ssidlength = 8
+servicelength = 8
+
+ssid_length = form.Validator("SSID length should be between 1 and %d characters" % ssidlength, lambda p: p is None or len(p) > ssidlength)
+passwd_length = form.Validator("Password length should be %d characters" % passlength, lambda p: len(p)!= passlength)
+router_ssid_length = form.Validator("Router SSID length should be between 1 and %d characters" % wifissidlength , lambda p: p is None or len(p) > wifissidlength)
+router_passwd_length = form.Validator("Router password length should be less then %d characters" % wifipasslength, lambda p: len(p) > wifipasslength)
+turnout_length = form.Validator("Turnout name length should less than 11 characters", lambda p: p is None or len(p) > 11)
+service_name_length = form.Validator("Service name length should less than %d characters" % servicelength , lambda p: p is None or len(p) > servicelength)
 
 
 def configurePi():
@@ -214,7 +218,7 @@ class index:
             cm.setValue("router_ssid", str(form[id_router_ssid].value))
             cm.setValue("router_password", str(form[id_router_password].value))
             cm.setValue("can_grid", str(form[id_grid_enable].checked))
-	    cm.setValue(id_edserver, str(form[id_edserver].checked))
+	        cm.setValue(id_edserver, str(form[id_edserver].checked))
             cm.setValue("cangrid_port", str(form[id_grid_port].value))
             cm.setValue("service_name", str(form[id_bonjour_name].value))
             cm.setValue("tcpport", str(form[id_ed_tcpport].value))
@@ -290,12 +294,12 @@ class index:
         global desc_ed_tcpport
         global desc_grid_port
 
-        if form[id_apmode].checked == True :
-            if len(form[id_ssid].value) > 8 or len(form[id_ssid].value) == 0 :
-                return False, "SSID length should be between 1 and 8 characters"
+        if len(form[id_ssid].value) > ssidlength or len(form[id_ssid].value) == 0 :
+            return False, "SSID length should be between 1 and %d characters" % ssidlength
 
-            if len(form[id_password].value) != 8 and form[id_apmode_no_passwd].checked == False:
-                return False, "Password length should be 8 characters"
+        if form[id_apmode].checked == True :
+            if len(form[id_password].value) != passlength and form[id_apmode_no_passwd].checked == False:
+                return False, "Password length should be %d characters" % passlength
         else:
             if len(form[id_router_ssid].value) > wifissidlength or len(form[id_router_ssid].value) == 0 :
                 return False, "Router SSID length should be between 1 and %d characters" % wifissidlength
@@ -416,7 +420,7 @@ class index:
             form.Textbox(id_ed_tcpport,description=desc_ed_tcpport,value=cm.getValueInsert("tcpport",5555),id="tcpport"),
             form.Checkbox(id_grid_enable,description=desc_grid_enable,checked=gridenable,value="gridenable",id="cangrid"),
             form.Checkbox(id_edserver,description=desc_edserver_code,checked=edserver,value="edserver",id="edserver"),
-            form.Textbox(id_grid_port,description=desc_grid_port,value=cm.getValueInsert("cangrid_port",4444),id="cangripport"),
+            form.Textbox(id_grid_port,description=desc_grid_port,value=cm.getValueInsert("cangrid_port",5550),id="cangripport"),
             form.Textbox(id_canid,description=desc_canid,value=cm.getValueInsert("canid",100)),
             form.Textbox(id_start_event_id,description=desc_start_event,value=cm.getValueInsert(id_start_event_id,1)),
             form.Textbox(id_orphan_timeout,description=desc_orphan_timeout,value=cm.getValueInsert(id_orphan_timeout,30)),
