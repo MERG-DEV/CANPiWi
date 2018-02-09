@@ -218,7 +218,7 @@ class index:
             cm.setValue("router_ssid", str(form[id_router_ssid].value))
             cm.setValue("router_password", str(form[id_router_password].value))
             cm.setValue("can_grid", str(form[id_grid_enable].checked))
-	        cm.setValue(id_edserver, str(form[id_edserver].checked))
+	    cm.setValue(id_edserver, str(form[id_edserver].checked))
             cm.setValue("cangrid_port", str(form[id_grid_port].value))
             cm.setValue("service_name", str(form[id_bonjour_name].value))
             cm.setValue("tcpport", str(form[id_ed_tcpport].value))
@@ -445,13 +445,13 @@ class upload:
         msg=readMessage()
         web.header("Content-Type","text/html; charset=utf-8")
         return """<html><head></head><body>
-<header><h4>""" + msg + """</br></h4></header>
-<form method="POST" enctype="multipart/form-data" action="">
-<input type="file" name="myfile" />
-<br/>
-<input type="submit" />
-</form>
-</body></html>"""
+                  <header><h4>""" + msg + """</br></h4></header>
+                  <form method="POST" enctype="multipart/form-data" action="">
+                  <input type="file" name="myfile" />
+                  <br/>
+                  <input type="submit" />
+                  </form>
+                  </body></html>"""
 
     def POST(self):
         x = web.input(myfile={})

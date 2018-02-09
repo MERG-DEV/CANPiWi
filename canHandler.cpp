@@ -391,16 +391,7 @@ void canHandler::run_queue_reader(void* param){
             * Check if some other node is doing auto enum
             * and answer with out canid
             */
-            if (((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe){
-                struct can_frame frame_resp;
-                memset(frame_resp.data , 0 , sizeof(frame_resp.data));
-                frame_resp.can_id = canId & 0x7f;
-                frame_resp.can_dlc = 0;
-                frame_resp.data[0] = canId;
-                put_to_out_queue(frame_resp.can_id,(char*)frame_resp.data,0,CLIENT_TYPE::ED);
-
-            }
-            else{
+            if (!(((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe)){
                 //Handle cbus
                 if (stdframe){
                     opc = frame.data[0];
@@ -440,6 +431,22 @@ void canHandler::run_queue_reader(void* param){
 
                 }
             }
+
+
+            /*
+            * Check if some other node is doing auto enum
+            * and answer with out canid
+            */
+            if (((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe){
+                struct can_frame frame_resp;
+                memset(frame_resp.data , 0 , sizeof(frame_resp.data));
+                frame_resp.can_id = canId & 0x7f;
+                frame_resp.can_dlc = 0;
+                frame_resp.data[0] = canId;
+                put_to_out_queue(frame_resp.can_id,(char*)frame_resp.data,0,CLIENT_TYPE::ED);
+
+            }
+
         }
 
         //usleep(3000);
