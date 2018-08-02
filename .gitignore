@@ -1,4 +1,5 @@
 *.pyc
+webserver/*.pyc
 .idea/
 .idea/workspace.xml
 *.o

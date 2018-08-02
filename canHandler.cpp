@@ -540,8 +540,15 @@ void canHandler::finishSelfEnum(int id){
         canids.push_back(ct);
     }
     if ((sysTimeMS_end - sysTimeMS_start) > WAIT_ENUM){
+        char sendframe[CAN_MSG_SIZE];
+        memset(sendframe,0,CAN_MSG_SIZE);
         logger->debug("[canHandler] Finishing auto enumeration.");
         auto_enum_mode = false;
+
+        byte Hb,Lb;
+        Lb = node_number & 0xff;
+        Hb = (node_number >> 8) & 0xff;
+
         //sort and get the smallest free
         if (canids.size()>0){
             int c,n;
@@ -563,12 +570,8 @@ void canHandler::finishSelfEnum(int id){
                     }
                 }
             }
-            if (soft_auto_enum){
-                char sendframe[CAN_MSG_SIZE];
-                memset(sendframe,0,CAN_MSG_SIZE);
-                byte Hb,Lb;
-                Lb = node_number & 0xff;
-                Hb = (node_number >> 8) & 0xff;
+            
+            if (soft_auto_enum){                
 
                 // check that could allocate a canid and if not send an error otherwise send a NNACK
                 if (canId == 0){
@@ -591,8 +594,16 @@ void canHandler::finishSelfEnum(int id){
             }
         }
         else{
-            canId = 1;
+            canId = config->getCanID();   
+            if (soft_auto_enum){
+                logger->debug("[canHandler] New canid allocated. Sending NNACK");
+                sendframe[0] = OPC_NNACK;
+                sendframe[1] = Hb;
+                sendframe[2] = Lb;
+                put_to_out_queue(sendframe, 3, CLIENT_TYPE::CBUS);
+            }         
         }
+
         config->setCanID(canId);
         logger->debug("[canHandler] New canid is %d", canId);
     }
