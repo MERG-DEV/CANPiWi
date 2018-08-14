@@ -24,25 +24,25 @@
 //MTS3<......MTLS1<;>]\[]\[]
 
 //regex to identify a set speed message
-#define RE_SPEED "M[STA]+[SL\\*]([0-9]+)?<;>[VX]([0-9]+)?"
+#define RE_SPEED "M[0-9STA]+[SL\\*]([0-9]+)?<;>[VX]([0-9]+)?"
 //regex to identify a create session message
-#define RE_SESSION  "M[STA]+\\+[SL][0-9]+<;>.*"
+#define RE_SESSION  "M[0-9STA]+\\+[SL][0-9]+<;>.*"
 //regex to identify a release session message
-#define RE_REL_SESSION "M[STGA]+\\-[SL\\*]([0-9]+)?<;>.*"
+#define RE_REL_SESSION "M[0-9STGA]+\\-[SL\\*]([0-9]+)?<;>.*"
 //regex to identify a create session message
-#define RE_DIR "M[STA]+[SL\\*]([0-9]+)?<;>R[0-1]"
+#define RE_DIR "M[0-9STA]+[SL\\*]([0-9]+)?<;>R[0-1]"
 //regex to identify a query speed
-#define RE_QRY_SPEED "M[STA]+[SL\\*]([0-9]+)?<;>qV"
+#define RE_QRY_SPEED "M[0-9STA]+[SL\\*]([0-9]+)?<;>qV"
 //regex to identify a query direction
-#define RE_QRY_DIRECTION "M[STA]+[SL\\*]([0-9]+)?<;>qR"
+#define RE_QRY_DIRECTION "M[0-9STA]+[SL\\*]([0-9]+)?<;>qR"
 //regex to identify a query direction
-#define RE_FUNC "M[STA]+[SL\\*]([0-9]+)?<;>F[0-9]+"
+#define RE_FUNC "M[0-9STA]+[SL\\*]([0-9]+)?<;>F[0-9]+"
 //regex to identify turnout messages
 #define RE_TURNOUT "PTA[0-9]MT\\+[0-9]+;\\-[0-9]+"
 //PTATMT8 PTACMT8
 //regex to identify turnout messages
 #define RE_TURNOUT_GENERIC "PTA[TC24]MT[0-9]+"
 //regex to identify idle
-#define RE_IDLE "M[STA]+[SL\\*]([0-9]+)?<;>I"
+#define RE_IDLE "M[0-9STA]+[SL\\*]([0-9]+)?<;>I"
 
 #endif //MSGDATA_H

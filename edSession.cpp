@@ -15,7 +15,7 @@ edSession::edSession(log4cpp::Category *logger,int sessionuid)
     speed = 0;
     direction = 0;
     ad_type = 'S';
-    sessionType = SESSION_TYPE::MULTI_SESSION;
+    sessionType = 'T';
     this->logger = logger;
 	orphan = false;
 	session_set = false;
@@ -221,17 +221,11 @@ string edSession::getLocoName(){
     return loconame;
 }
 
-void edSession::setSessionType(SESSION_TYPE stype){
+void edSession::setSessionType(char stype){
     sessionType = stype;
 }
-SESSION_TYPE edSession::getSessionType(){
+char edSession::getSessionType(){
     return sessionType;
-}
-
-char edSession::getCharSessionType(){
-    if (sessionType == SESSION_TYPE::MULTI_SESSION) return 'S';
-    if (sessionType == SESSION_TYPE::MULTI_THROTTLE) return 'T';
-    return 'T';
 }
 
 void edSession::setFnType(int fn ,FN_TYPE state){

@@ -74,10 +74,8 @@ class edSession
 		
 		bool isSessionSet();
 
-        void setSessionType(SESSION_TYPE stype);
-        SESSION_TYPE getSessionType();
-
-        char getCharSessionType();
+        void setSessionType(char stype);
+        char getSessionType();       
 
     protected:
     private:
@@ -101,7 +99,7 @@ class edSession
         string loconame;
         log4cpp::Category *logger;
         nodeConfigurator *config;
-        SESSION_TYPE sessionType;
+        char sessionType;
 
         byte setBit(byte val, int pos);
         byte clearBit(byte val, int pos);
