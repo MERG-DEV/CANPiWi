@@ -170,15 +170,15 @@ service_name_length = form.Validator("Service name length should less than %d ch
 
 def configurePi():
     #time.sleep(3)
-    os.system("/etc/init.d/start_canpi.sh configure")
+    os.system("sudo /etc/init.d/start_canpi.sh configure")
 
 def restartAll():
     #time.sleep(3)
-    os.system("/etc/init.d/start_canpi.sh restart")
+    os.system("sudo /etc/init.d/start_canpi.sh restart")
 
 def shutdownPi():
     #time.sleep(3)
-    os.system("/etc/init.d/start_canpi.sh shutdown")
+    os.system("sudo /etc/init.d/start_canpi.sh shutdown")
 
 class index:
 
@@ -251,7 +251,7 @@ class index:
         if id_btn_restart in userData:
             print("Restart button pressed")
             writeMessage("")
-            os.system("/etc/init.d/start_canpi.sh restartcanpi")
+            os.system("sudo /etc/init.d/start_canpi.sh restartcanpi")
             exitcode,out,err = self.get_exitcode_stdout_stderr("ps -ef")
             msg=""
             if "/home/pi/canpi/canpi" in out:
@@ -263,7 +263,7 @@ class index:
         if id_btn_stop in userData:
             print("Stop button pressed")
             writeMessage("")
-            os.system("/etc/init.d/start_canpi.sh stopcanpi")
+            os.system("sudo /etc/init.d/start_canpi.sh stopcanpi")
             exitcode,out,err = self.get_exitcode_stdout_stderr("ps -ef")
             msg=""
             if "/home/pi/canpi/canpi" in out:
@@ -465,7 +465,7 @@ class upload:
                 fout = open(filedir +'/'+ filename,'w') # creates the file where the uploaded file should be stored
                 fout.write(x.myfile.file.read()) # writes the uploaded file to the newly created file.
                 fout.close() # closes the file, upload complete.
-                os.system("/etc/init.d/start_canpi.sh upgrade")
+                os.system("sudo /etc/init.d/start_canpi.sh upgrade")
                 writeMessage("Upgrade file copied and applied.");
                 #subprocess.call(['chmod', '+x', filedir +'/'+ filename])
 	    else:

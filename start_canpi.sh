@@ -236,7 +236,7 @@ kill_all_processes(){
     for pid in $list;
     do
         echo "Killing process $pid"
-        kill -9 $pid
+        sudo kill -9 $pid
     done
 }
 
@@ -419,7 +419,7 @@ bootstrap(){
 stop_canpi(){
     if is_running; then
         echo -n "Stopping $name.."
-        kill `get_pid`
+        sudo kill `get_pid`
         for i in {1..10}
         do
             if ! is_running; then
@@ -434,7 +434,7 @@ stop_canpi(){
         if is_running; then
             echo "Terminating the service"
             
-            kill -9 `get_pid`
+            sudo kill -9 `get_pid`
             for i in {1..10}
             do
               if ! is_running; then
@@ -453,7 +453,7 @@ stop_canpi(){
         else
             echo "Stopped"
             if [ -f "$pid_file" ]; then
-                rm "$pid_file"
+                sudo rm "$pid_file"
             fi
         fi
     else
@@ -622,7 +622,7 @@ clean_upgrade_files()
     echo "Cleaning"
     if [[ -d "${upgradedir}" && ! -L "${upgradedir}" ]] ; then
         echo "Deleting ${upgradedir}/*"
-        rm -rf ${upgradedir}/*
+        sudo rm -rf ${upgradedir}/*
     fi
 }
 
@@ -675,7 +675,7 @@ start_webserver(){
 stop_webserver(){
     if is_web_running; then
         echo -n "Stopping $webname.."
-        kill `get_web_pid`
+        sudo kill `get_web_pid`
         for i in {1..10}
         do
             if ! is_web_running; then
@@ -693,7 +693,7 @@ stop_webserver(){
         else
             echo "Stopped"
             if [ -f "$web_pid_file" ]; then
-                rm "$web_pid_file"
+                sudo rm "$web_pid_file"
             fi
         fi
     else
