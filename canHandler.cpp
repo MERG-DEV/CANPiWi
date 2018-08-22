@@ -373,82 +373,83 @@ void canHandler::run_queue_reader(void* param){
             pthread_mutex_unlock(&m_mutex_in);
         }
         else {
-            canframe = in_msgs.front();
-            in_msgs.pop();
-            pthread_mutex_unlock(&m_mutex_in);
+            // consume all messages
+            while (!in_msgs.empty()){
+            
+                canframe = in_msgs.front();
+                in_msgs.pop();                
 
-            frame = canframe.getFrame();
-            if ((frame.can_id & CAN_EFF_FLAG) == CAN_EFF_FLAG){
-                stdframe = false;
-                print_frame(&frame,"[canHandler] Received extended frame");
-            }
-            else{
-                stdframe = true;
-                print_frame(&frame,"[canHandler] Received standard frame");
-            }
+                frame = canframe.getFrame();
+                if ((frame.can_id & CAN_EFF_FLAG) == CAN_EFF_FLAG){
+                    stdframe = false;
+                    print_frame(&frame,"[canHandler] Received extended frame");
+                }
+                else{
+                    stdframe = true;
+                    print_frame(&frame,"[canHandler] Received standard frame");
+                }
 
-            /*
-            * Check if some other node is doing auto enum
-            * and answer with out canid
-            */
-            if (!(((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe)){
-                //Handle cbus
-                if (stdframe){
-                    opc = frame.data[0];
-                    if (opc == OPC_QNN ||
-                        opc == OPC_RQMN ||
-                        opc == OPC_RQNP ||
-                        opc == OPC_SNN ||
-                        opc == OPC_ENUM ||
-                        opc == OPC_HLT ||
-                        opc == OPC_BON ||
-                        opc == OPC_BOOT ||
-                        opc == OPC_ARST ||
-                        opc == OPC_CANID ||
-                        opc == OPC_NVSET ||
-                        opc == OPC_RQNPN ||
-                        opc == OPC_NVRD ||
-                        opc == OPC_ASON){
-                        handleCBUSEvents(canframe);
+                /*
+                * Check if some other node is doing auto enum
+                * and answer with out canid
+                */
+                if (!(((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe)){
+                    //Handle cbus
+                    if (stdframe){
+                        opc = frame.data[0];
+                        if (opc == OPC_QNN ||
+                            opc == OPC_RQMN ||
+                            opc == OPC_RQNP ||
+                            opc == OPC_SNN ||
+                            opc == OPC_ENUM ||
+                            opc == OPC_HLT ||
+                            opc == OPC_BON ||
+                            opc == OPC_BOOT ||
+                            opc == OPC_ARST ||
+                            opc == OPC_CANID ||
+                            opc == OPC_NVSET ||
+                            opc == OPC_RQNPN ||
+                            opc == OPC_NVRD ||
+                            opc == OPC_ASON){
+                            handleCBUSEvents(canframe);
+                        }
                     }
                 }
-            }
 
-            if (servers.size() > 0){
-                for (server = servers.begin();server != servers.end(); server++){
-                    //do not send message from GRID to GRID
-                    if (canframe.getClientType() == CLIENT_TYPE::GRID){
-                        if ((*server)->getClientType() != canframe.getClientType()){
-                            (*server)->addCanMessage(frame.can_id,(char*)frame.data, frame.can_dlc);
+                if (servers.size() > 0){
+                    for (server = servers.begin();server != servers.end(); server++){
+                        //do not send message from GRID to GRID
+                        if (canframe.getClientType() == CLIENT_TYPE::GRID){
+                            if ((*server)->getClientType() != canframe.getClientType()){
+                                (*server)->addCanMessage(frame.can_id,(char*)frame.data, frame.can_dlc);
+                            }
+                            else{
+                                print_frame(&frame,"[canHandler] Droping message from GRID to GRID");
+                            }
                         }
                         else{
-                            print_frame(&frame,"[canHandler] Droping message from GRID to GRID");
+                            (*server)->addCanMessage(frame.can_id,(char*)frame.data, frame.can_dlc);
                         }
-                    }
-                    else{
-                        (*server)->addCanMessage(frame.can_id,(char*)frame.data, frame.can_dlc);
-                    }
 
+                    }
+                }
+
+                /*
+                * Check if some other node is doing auto enum
+                * and answer with out canid
+                */
+                if (((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe){
+                    struct can_frame frame_resp;
+                    memset(frame_resp.data , 0 , sizeof(frame_resp.data));
+                    frame_resp.can_id = canId & 0x7f;
+                    frame_resp.can_dlc = 0;
+                    frame_resp.data[0] = canId;
+                    put_to_out_queue(frame_resp.can_id,(char*)frame_resp.data,0,CLIENT_TYPE::ED);
                 }
             }
-
-
-            /*
-            * Check if some other node is doing auto enum
-            * and answer with out canid
-            */
-            if (((frame.can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG) && stdframe){
-                struct can_frame frame_resp;
-                memset(frame_resp.data , 0 , sizeof(frame_resp.data));
-                frame_resp.can_id = canId & 0x7f;
-                frame_resp.can_dlc = 0;
-                frame_resp.data[0] = canId;
-                put_to_out_queue(frame_resp.can_id,(char*)frame_resp.data,0,CLIENT_TYPE::ED);
-
-            }
-
+            // release the lock because the queue is empty
+            pthread_mutex_unlock(&m_mutex_in);
         }
-
         //usleep(3000);
     }
     logger->debug("[canHandler] Stopping the queue reader");
