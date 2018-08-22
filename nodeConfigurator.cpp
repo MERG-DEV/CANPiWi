@@ -487,7 +487,7 @@ string nodeConfigurator::getNodeName(){
 }
 
 //saves the string to config file
-string nodeConfigurator::getMomentaryFn(bool fresh=true){
+string nodeConfigurator::getMomentaryFn(bool fresh /*=true*/){
     string ret;
     if (fresh) loadConfig();
     ret = getStringConfig(TAG_FNMOM);
@@ -708,7 +708,7 @@ bool nodeConfigurator::setCanGridPort(int val){
     return true;
 }
 
-int nodeConfigurator::getCanID(bool fresh=true){
+int nodeConfigurator::getCanID(bool fresh/*=true*/){
     int ret;
     if (fresh) loadConfig();
     ret = getIntConfig(TAG_CANID);
@@ -740,7 +740,7 @@ bool nodeConfigurator::setCanID(int val){
     return true;
 }
 
-int nodeConfigurator::getNodeNumber(bool fresh=true){
+int nodeConfigurator::getNodeNumber(bool fresh/*=true*/){
     int ret;
     if (fresh) loadConfig();
     ret = getIntConfig(TAG_NN);
@@ -1028,7 +1028,7 @@ bool nodeConfigurator::setTurnoutFile(string val){
     config[TAG_TURNOUT] = val;
     return true;
 }
-string nodeConfigurator::getTurnoutFile(bool fresh=true){
+string nodeConfigurator::getTurnoutFile(bool fresh/*=true*/){
     string ret;
     if (fresh) loadConfig();
     ret = getStringConfig(TAG_TURNOUT);
