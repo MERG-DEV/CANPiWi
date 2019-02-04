@@ -1259,13 +1259,18 @@ void tcpClient::handleTurnoutGeneric(string message){
     int i = message.find("PTA");
     int j = message.find("MT");
 
-    logger->debug("[%d] [tcpClient] Extracted turnout action: %s" ,id,message.substr(i+3,1).c_str());
+    logger->debug("[%d] [tcpClient] Extracted turnout action: %s" , id, message.substr(i + 3, 1).c_str());
     string tstate = message.substr(i+3,1).c_str();
 
-    logger->debug("[%d] [tcpClient] Extracted turnout code: %s" ,id,message.substr(j+2,message.size()-j-2).c_str());
-    int tcode = atoi(message.substr(j+2,message.size()-j-2).c_str());
+    int tcode = 0;
+    int offset = i + 4;
+    if (j > 0) { offset = j + 2; }
+    logger->debug("[%d] [tcpClient] Extracted turnout code: %s" , id, 
+                      message.substr(offset, message.size() - offset).c_str());
+        tcode = atoi(message.substr(offset, message.size() - offset).c_str());
+    
     //sanity checkings
-    string scode = message.substr(j+2,message.size()-j-2).c_str();
+    string scode = message.substr(offset, message.size() - offset).c_str();
     if (turnouts->size() == 0){
         logger->debug("[%d] [tcpClient] Turnout table empty. Inserting turnout %d" ,id, tcode);
         turnouts->addTurnout(scode,tcode);
