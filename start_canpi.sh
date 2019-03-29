@@ -150,7 +150,7 @@ set_avahi_daemon(){
    
    is_edserver_not_enabled
    if [ $? -eq 1 ];then
-      echo "Starting bonjour service"
+      echo "Starting bonjour service"      
       /etc/init.d/avahi-daemon start
    else
       echo "Stoping bonjour service"
@@ -367,9 +367,11 @@ setup_ap_mode()
     sudo ip link set wlan0 up
 
     sleep 2
-    sudo /etc/init.d/hostapd start
+    sudo service hostapd start
+    #sudo /etc/init.d/hostapd start
     sleep 1
-    sudo /etc/init.d/isc-dhcp-server start
+    sudo service isc-dhcp-server start
+    #sudo /etc/init.d/isc-dhcp-server start
 
     echo "Configuring the hostapd daemon"
     sudo /usr/sbin/update-rc.d hostapd defaults
@@ -386,11 +388,13 @@ setup_wifi_mode(){
     sudo ip link set wlan0 down
 
     echo "Stoping the hostapd service"
-    sudo /etc/init.d/hostapd stop
+    sudo service hostapd stop
+    #sudo /etc/init.d/hostapd stop
     sleep 1
 
     echo "Stoping the DHCP service"
-    sudo /etc/init.d/isc-dhcp-server stop
+    sudo service isc-dhcp-server stop
+    #sudo /etc/init.d/isc-dhcp-server stop
     sleep 1
 
     #echo "Starting wlan0"

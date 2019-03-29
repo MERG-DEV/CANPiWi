@@ -100,6 +100,9 @@ apt-get -y install git
 
 message_header "HOSTAPD"
 apt-get -y install hostapd
+systemctl unmask hostapd.service
+systemctl enable hostapd
+service hostapd restart
 
 message_header "DHCP"
 apt-get -y install isc-dhcp-server
@@ -177,6 +180,7 @@ cp "$canpidir/dhcpd.conf" /etc/dhcp/
 
 mv /etc/default/isc-dhcp-server /etc/default/isc-dhcp-server.old
 cp "$canpidir/isc-dhcp-server" /etc/default
+systemctl enable isc-dhcp-server
 
 message_header "CONFIGURE SCRIPT FILES"
 cp "$canpidir/start_canpi.sh" /etc/init.d/
