@@ -167,7 +167,7 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
             s = 24 - (8 - dlc)*2; // max msg + \n - data size offset
         }
 
-        logger->debug("[%d] Grid server sending grid message to client: %s",id, ss.str().c_str());
+        logger->notice("[%d] Grid server sending grid message to client: %s",id, ss.str().c_str());
         if (running == 0){
             logger->error("Can grid client stoping. Not sending message to clients.");
             return;
@@ -198,7 +198,7 @@ void tcpClientGridConnect::run(void *param){
         }
         else if (nbytes>0){
             try{
-                logger->debug("[%d] Received from grid client:%s Bytes:%d",id, msg, nbytes);
+                logger->debug("[%d] Received from grid client:%s Bytes:%d",id, msg, nbytes);                
                 string message(msg);
 				msg_received++;
                 pthread_mutex_lock(&m_mutex_in);

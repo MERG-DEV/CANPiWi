@@ -85,11 +85,29 @@ int main()
     string debugLevel = config->getLogLevel();
 
     if (!debugLevel.empty()){
-        if (debugLevel.compare(TAG_INFO)== 0){
+        if (debugLevel.compare(TAG_INFO) == 0){
            loglevel = log4cpp::Priority::INFO;
         }
-        if (debugLevel.compare(TAG_WARN)== 0){
+        if (debugLevel.compare(TAG_WARN) == 0){
            loglevel = log4cpp::Priority::WARN;
+        }
+        if (debugLevel.compare(TAG_NOTICE) == 0){
+           loglevel = log4cpp::Priority::NOTICE;
+        }
+        if (debugLevel.compare(TAG_FATAL) == 0){
+           loglevel = log4cpp::Priority::FATAL;
+        }
+        if (debugLevel.compare(TAG_ERROR) == 0){
+           loglevel = log4cpp::Priority::ERROR;
+        }
+        if (debugLevel.compare(TAG_EMERG) == 0){
+           loglevel = log4cpp::Priority::EMERG;
+        }
+        if (debugLevel.compare(TAG_ALERT) == 0){
+           loglevel = log4cpp::Priority::ALERT;
+        }
+        if (debugLevel.compare(TAG_NOTSET) == 0){
+           loglevel = log4cpp::Priority::NOTSET;
         }
     }
 
