@@ -16,7 +16,8 @@ invalid_ports = [21,22,80]
 
 render = web.template.render('templates/')
 urls = ('/', 'index',
-        '/upload' , 'upload'
+        '/upload' , 'upload',
+        '/viewlog' , 'viewlog'
         )
 app = web.application(urls, globals(),autoreload=True)
 
@@ -118,6 +119,7 @@ id_btn_restart = "btnRestart"
 id_btn_stop = "btnStop"
 id_btn_restart_all = "btnRestartAll"
 id_btn_update_file = "btnUpdateFile"
+id_btn_viewlog = "btnViewlog"
 id_btn_shutdown = "btnShutdown"
 id_orphan_timeout = "orphan_timeout"
 id_shutdown_code = "shutdown_code"
@@ -148,6 +150,7 @@ desc_btn_restart = "btnRestart"
 desc_btn_stop = "btnStop"
 desc_btn_restart_all = "btnRestartAll"
 desc_btn_update_file = "btnUpdateFile"
+desc_btn_viewlog = "btnViewlog"
 desc_btn_shutdown = "btnShutdown"
 desc_orphan_timeout = "Orphan sessions timeout seconds"
 desc_shutdown_code = "Shutdown code"
@@ -247,6 +250,11 @@ class index:
             print("Upgrade button pressed")
             writeMessage("")
             raise web.seeother('/upload')
+
+        if id_btn_viewlog in userData:
+            print("View log button pressed")
+            writeMessage("")
+            raise web.seeother('/viewlog')
 
         if id_btn_restart in userData:
             print("Restart button pressed")
@@ -427,7 +435,7 @@ class index:
             form.Textbox(id_shutdown_code,description=desc_shutdown_code,value=cm.getValueInsert(id_shutdown_code,-1)),
             form.Textbox(id_fns_momentary,description=desc_fns_momentary,value=cm.getValueInsert("fn_momentary","2")),
             form.Textbox(id_turnout_file,turnout_length,description=desc_turnout_file,value=cm.getValueInsert("turnout_file","turnout.txt")),
-            form.Dropdown(id_loglevel,  ['INFO', 'WARN', 'DEBUG'],value=cm.getValueInsert("loglevel","INFO")),
+            form.Dropdown(id_loglevel,  ['NOTSET', 'INFO', 'WARN', 'NOTICE', 'DEBUG'],value=cm.getValueInsert("loglevel","INFO")),
             form.Checkbox(id_create_logfile,description=desc_create_logfile,checked=create_logfile,value=id_create_logfile,id="tcreate_logfile"),
             form.Checkbox(id_logappend,description=desc_logappend,checked=logappend,value= id_logappend,id="tlogappend"),
             #form.Textbox(id_logfile,description=,value=cm.getValue("logfile"),id="logfile"),
@@ -436,7 +444,8 @@ class index:
             form.Button(desc_btn_stop, id=id_btn_stop, value="stop", html="Stop throttle service"),
             form.Button(desc_btn_restart_all, id=id_btn_restart_all, value="stop", html="Restart throttle and configuration page"),
             form.Button(desc_btn_restart, id=id_btn_restart, value="restart", html="Restart throttle service"),
-            form.Button(desc_btn_update_file, id=id_btn_update_file, value="upgrade", html="Upload upgrade file"))
+            form.Button(desc_btn_update_file, id=id_btn_update_file, value="upgrade", html="Upload upgrade file"),
+            form.Button(desc_btn_viewlog, id=id_btn_viewlog, value="viewlog", html="View logs"))
 
         return myform()
 
@@ -473,6 +482,19 @@ class upload:
                 raise web.seeother('/upload')
 
         raise web.seeother('/')
+
+class viewlog:
+    def GET(self):
+        logfile = "/home/pi/canpi/canpi.log"
+        flog = open(logfile, 'r')  # open the logfile
+        log = flog.read()
+        flog.close()  # closes the file
+        web.header("Content-Type","text/html; charset=utf-8")
+        return """<html><head></head><body>
+                  <header><h4>""" + log + """</br></h4></header>                                    
+                  <br/>                  
+                  </form>
+                  </body></html>"""
 
 if __name__=="__main__":
     web.internalerror = web.debugerror

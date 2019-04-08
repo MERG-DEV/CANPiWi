@@ -131,7 +131,7 @@ void tcpClient::run(void *param){
             running = 0;
         }
         else if (nbytes>0){
-            logger->debug("[%d] [tcpClient] Received from ED:%s Bytes:%d",id, msg, nbytes);
+            logger->notice("[%d] [tcpClient] Received from ED:%s Bytes:%d",id, msg, nbytes);
             try{
                 handleEDMessages(msg);
             }
@@ -605,7 +605,7 @@ string tcpClient::generateFunctionsLabel(int loco,char stype, char adtype){
 
 void tcpClient::sendToEd(string msg){
     unsigned int nbytes;
-    logger->debug("[%d] [tcpClient] Send to ED:%s",id, msg.c_str());
+    logger->notice("[%d] [tcpClient] Send to ED:%s",id, msg.c_str());
     nbytes = write(client_sock,msg.c_str(),msg.length());
     if (nbytes != msg.length()){
         logger->error("[tcpClient] Fail to send message %s to ED",id, msg.c_str());

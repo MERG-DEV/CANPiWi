@@ -10,7 +10,7 @@ canHandler::canHandler(log4cpp::Category *logger, int canId)
     pthread_cond_init(&m_condv, NULL);
     pthread_mutex_init(&m_mutex_in, NULL);
     pthread_cond_init(&m_condv_in, NULL);
-    pb_pressed = false;
+    pb_pressed = false;        
 }
 
 canHandler::~canHandler()
@@ -127,7 +127,7 @@ int canHandler::put_to_out_queue(char *msg,int msize,CLIENT_TYPE ct){
 int canHandler::put_to_out_queue(int canid,char *msg,int msize,CLIENT_TYPE ct){
     int i = 0;
     int j = CAN_MSG_SIZE;
-    struct can_frame frame;
+    struct can_frame frame;    
 
     if (msize < CAN_MSG_SIZE){
         j = msize;
@@ -138,9 +138,8 @@ int canHandler::put_to_out_queue(int canid,char *msg,int msize,CLIENT_TYPE ct){
 
     for (i = 0;i < j; i++){
         frame.data[i]=msg[i];
-    }
-    logger->debug("[canHandler] Add message to cbus queue");
-    print_frame(&frame,"[canHandler] Insert");
+    }    
+    print_frame(&frame,"[canHandler] Add message to cbus queue");
     //thread safe insert
     frameCAN canframe = frameCAN(frame,ct);
 
@@ -230,9 +229,7 @@ int canHandler::start(const char* interface){
         logger->error("[canHandler] Unable to bind can socket");
 		return -1;
 	}
-	running = 1;
-    logger->debug("[canHandler] Can socket successfuly created. Starting the CBUS reader thread");
-	pthread_create(&cbusReader,nullptr,canHandler::thread_entry_in,this);
+	running = 1;    
 
 	logger->debug("[canHandler] Starting the queue reader thread");
 	pthread_create(&queueReader,nullptr,canHandler::thread_entry_in_reader,this);
@@ -242,6 +239,9 @@ int canHandler::start(const char* interface){
 
 	logger->debug("[canHandler] Starting the push button thread");
 	pthread_create(&pbLogic,nullptr,canHandler::thread_entry_pb_logic,this);
+
+    logger->debug("[canHandler] Can socket successfuly created. Starting the CBUS reader thread");
+	pthread_create(&cbusReader,nullptr,canHandler::thread_entry_in,this);
 
 	return canInterface;
 }
@@ -337,6 +337,8 @@ void canHandler::run_in(void* param){
         }
         else{
             frameCAN canframe = frameCAN(frame,CLIENT_TYPE::CBUS);
+            struct can_frame frame = canframe.getFrame();
+            dump_frame(&frame, "RECEIVED CAN", false);
             pthread_mutex_lock(&m_mutex_in);
             in_msgs.push(canframe);
             pthread_cond_signal(&m_condv_in);
@@ -413,6 +415,15 @@ void canHandler::run_queue_reader(void* param){
                             opc == OPC_ASON){
                             handleCBUSEvents(canframe);
                         }
+                        else{
+                            string opcname = "";
+                            if (opcs.getByCode(frame.data[0]) != NULL){
+                                opcname = opcs.getByCode(frame.data[0])->getName();
+                            }
+                            logger->debug("[canHandler] Not handling message opc: %02x %s.",
+                                         frame.data[0],
+                                         opcname.c_str());
+                        }
                     }
                 }
 
@@ -443,7 +454,8 @@ void canHandler::run_queue_reader(void* param){
                     memset(frame_resp.data , 0 , sizeof(frame_resp.data));
                     frame_resp.can_id = canId & 0x7f;
                     frame_resp.can_dlc = 0;
-                    frame_resp.data[0] = canId;
+                    frame_resp.data[0] = canId & 0x7f;
+                    logger->debug("Received autoenum request. Sending can id %d", canId);
                     put_to_out_queue(frame_resp.can_id,(char*)frame_resp.data,0,CLIENT_TYPE::ED);
                 }
             }
@@ -461,11 +473,40 @@ void canHandler::run_queue_reader(void* param){
  */
 void canHandler::print_frame(can_frame *frame,string message){
 
-    logger->debug("%s Can Data : [%03x] [%d] data: %02x %02x %02x %02x %02x %02x %02x %02x"
+    if (logger->isDebugEnabled()){
+        logger->debug("%s Can Data : [%03x] [%d] data: %02x %02x %02x %02x %02x %02x %02x %02x"
                 ,message.c_str()
                 ,frame->can_id , frame->can_dlc
                 ,frame->data[0],frame->data[1],frame->data[2],frame->data[3]
                 ,frame->data[4],frame->data[5],frame->data[6],frame->data[7]);
+    }
+
+}
+
+void canHandler::dump_frame(can_frame *frame, string message, bool decode){    
+    
+    if (logger->isNoticeEnabled()){
+        string description;
+        opc_code* opc = opcs.getByCode(frame->data[0]);
+        if ( opc != NULL){
+            if ((frame->can_id & CAN_RTR_FLAG) == CAN_RTR_FLAG){
+                description = "Auto enum";
+            }
+            else{
+                description = " - " + opc->getName() + " " + opc->getDescription();
+            }
+        }
+        else{
+            description = "";
+        }
+
+        logger->notice("%s-ID:[%03x] DLC:[%d] DATA:[%02x %02x %02x %02x %02x %02x %02x %02x]%s"
+                ,message.c_str()
+                ,frame->can_id , frame->can_dlc
+                ,frame->data[0],frame->data[1],frame->data[2],frame->data[3]
+                ,frame->data[4],frame->data[5],frame->data[6],frame->data[7],
+                description.c_str());        
+    }
 }
 
 /**
@@ -501,6 +542,7 @@ void canHandler::run_out(void* param){
                 }
                 nbytes = write(canInterface, &frame, CAN_MTU);
                 print_frame(&frame,"[canHandler] Sent [" + to_string(nbytes) + "]");
+                dump_frame(&frame, "SENT CAN", false);
 
                 if (nbytes != CAN_MTU){
                     logger->debug("[canHandler] Problem on sending the CBUS, bytes transfered %d, supposed to transfer %d", nbytes, CAN_MTU);

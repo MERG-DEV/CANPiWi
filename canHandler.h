@@ -23,6 +23,7 @@
 #include "nodeConfigurator.h"
 #include "frameCAN.h"
 #include "tcpServer.h"
+#include "opc_codes.h"
 
 #define CAN_MSG_SIZE 8
 #define WAIT_ENUM 200 //ms
@@ -57,6 +58,8 @@ class canHandler
         int node_number;
         int canInterface;
         int running;
+        opc_container opcs;
+
         struct ifreq ifr;
         struct sockaddr_can addr;
         log4cpp::Category *logger;
@@ -106,7 +109,8 @@ class canHandler
 
         void restart_module(SCRIPT_ACTIONS action);
 
-        void print_frame(can_frame *frame,string message);
+        void print_frame(can_frame *frame, string message);
+        void dump_frame(can_frame *frame, string message, bool decode);
 
         static void* thread_entry_in(void *classPtr){
             ((canHandler*)classPtr)->run_in(nullptr);
