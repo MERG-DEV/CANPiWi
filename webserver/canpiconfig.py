@@ -435,7 +435,7 @@ class index:
             form.Textbox(id_shutdown_code,description=desc_shutdown_code,value=cm.getValueInsert(id_shutdown_code,-1)),
             form.Textbox(id_fns_momentary,description=desc_fns_momentary,value=cm.getValueInsert("fn_momentary","2")),
             form.Textbox(id_turnout_file,turnout_length,description=desc_turnout_file,value=cm.getValueInsert("turnout_file","turnout.txt")),
-            form.Dropdown(id_loglevel,  ['INFO', 'WARN', 'NOTICE', 'DEBUG'],value=cm.getValueInsert("loglevel","INFO")),
+            form.Dropdown(id_loglevel,  ['NOTSET', 'INFO', 'WARN', 'NOTICE', 'DEBUG'],value=cm.getValueInsert("loglevel","INFO")),
             form.Checkbox(id_create_logfile,description=desc_create_logfile,checked=create_logfile,value=id_create_logfile,id="tcreate_logfile"),
             form.Checkbox(id_logappend,description=desc_logappend,checked=logappend,value= id_logappend,id="tlogappend"),
             #form.Textbox(id_logfile,description=,value=cm.getValue("logfile"),id="logfile"),
