@@ -98,8 +98,17 @@ apt-get -y update
 message_header "GIT"
 apt-get -y install git
 
+message_header "UNBLOCK WIFI"
+rfkill unblock 0
+message_header "REMOVE RFKILL"
+apt-get -y remove rfkill
+
 message_header "HOSTAPD"
 apt-get -y install hostapd
+systemctl unmask hostapd
+systemctl enable hostapd
+systemctl start hostapd
+
 
 message_header "DHCP"
 apt-get -y install isc-dhcp-server
