@@ -230,7 +230,11 @@ void tcpClientGridConnect::run_in_grid_msgs(void *param){
     string msg;
     while (running){
         pthread_mutex_lock(&m_mutex_in);
-        pthread_cond_wait(&m_condv_in, &m_mutex_in);
+        // Wait only while there is nothing to do. A signal given while this thread
+        // was busy is not kept, so the queue is checked before waiting.
+        while (running && in_grid_msgs.empty()){
+            pthread_cond_wait(&m_condv_in, &m_mutex_in);
+        }
         if (in_grid_msgs.empty()){
             pthread_mutex_unlock(&m_mutex_in);
         }
