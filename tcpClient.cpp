@@ -452,7 +452,11 @@ void tcpClient::processCbusQueue(void *param){
     while (running){
 
         pthread_mutex_lock(&m_mutex_in_cli);
-        pthread_cond_wait(&m_condv_in_cli, &m_mutex_in_cli);
+        // Wait only while there is nothing to do. A signal given while this thread
+        // was busy is not kept, so the queue is checked before waiting.
+        while (running && in_msgs.empty()){
+            pthread_cond_wait(&m_condv_in_cli, &m_mutex_in_cli);
+        }
 
         if (in_msgs.empty()){
             pthread_mutex_unlock(&m_mutex_in_cli);
