@@ -23,7 +23,7 @@ class sessionHandler
         virtual ~sessionHandler();
         unsigned int retrieveAllEDSession(int client_id, string edname, long client_ip, vector<edSession*> *edsessions);
     	edSession* createEDSession(int client_id, string edname, long client_ip);
-        bool deleteEDSession(int sessionuid);
+        bool deleteEDSession(int sessionuid, int client_id); // deleted only by the client that owns it
         bool deleteAllEDSessions(int client_id);
         void start();
         void stop();
@@ -44,7 +44,6 @@ class sessionHandler
 		void sendCbusMessage(byte b0, byte b1, byte b2);
 
         pthread_mutex_t m_mutex_in;
-        pthread_cond_t  m_condv_in;
 
         static void* run_thread_entry(void *classPtr){
             ((sessionHandler*)classPtr)->run(classPtr);

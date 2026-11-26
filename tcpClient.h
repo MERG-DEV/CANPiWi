@@ -1,6 +1,7 @@
 #ifndef TCPCLIENT_H
 #define TCPCLIENT_H
 
+#include <atomic>
 #include "Client.h"
 #include "edSession.h"
 #include "opcodes.h"
@@ -41,6 +42,7 @@ class tcpClient : public Client
         int running;
         edSession* edsession;
         std::map<int,edSession*> sessions; //the loco number is the key
+        pthread_mutex_t m_mutex_sessions; // guards sessions and edsession
         sessionHandler *session_handler;
         Turnout *turnouts;
         std::queue<can_frame> in_msgs;
@@ -75,6 +77,8 @@ class tcpClient : public Client
 		void retrieveRemainingSessions();
 		void ackEDSessionCreated(edSession *ed, bool sendSpeedMode);
 		bool sessions_retrieved;
+		std::atomic<bool> sessions_done; // released by stop(), or orphaned at the end of run()
+		std::atomic<bool> socket_closed; // by stop(), or at the end of run()
 
         void setStartSessionTime();
         void shutdown();
