@@ -653,7 +653,7 @@ void tcpClient::sendToEd(string msg){
     logger->notice("[%d] [tcpClient] Send to ED:%s",id, msg.c_str());
     nbytes = write(client_sock,msg.c_str(),msg.length());
     if (nbytes != msg.length()){
-        logger->error("[tcpClient] Fail to send message %s to ED",id, msg.c_str());
+        logger->error("[%d] [tcpClient] Fail to send message %s to ED",id, msg.c_str());
     }
 }
 //return the loco
@@ -1253,7 +1253,7 @@ void tcpClient::handleTurnout(string message){
         turnouts->addTurnout(scode,tcode);
     }
     if (!turnouts->exists(tcode)){
-        logger->debug("[%d] [tcpClient] Turnout $d does not exist. Inserting" ,id,tcode);
+        logger->debug("[%d] [tcpClient] Turnout %d does not exist. Inserting" ,id,tcode);
         turnouts->addTurnout(scode,tcode);
         if (!turnouts->exists(tcode)){
             logger->debug("[%d] [tcpClient] Failed to insert turnout %d" ,id, tcode);
@@ -1336,7 +1336,7 @@ void tcpClient::handleTurnoutGeneric(string message){
         turnouts->addTurnout(scode,tcode);
     }
     if (!turnouts->exists(tcode)){
-        logger->debug("[%d] [tcpClient] Turnout $d does not exist. Inserting" ,id,tcode);
+        logger->debug("[%d] [tcpClient] Turnout %d does not exist. Inserting" ,id,tcode);
         turnouts->addTurnout(scode,tcode);
         if (!turnouts->exists(tcode)){
             logger->debug("[%d] [tcpClient] Failed to insert turnout %d" ,id, tcode);
