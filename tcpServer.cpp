@@ -12,11 +12,13 @@ tcpServer::tcpServer(log4cpp::Category *logger, int port, canHandler* can, sessi
     counter = 0;
     this->clientType = clientType;
     this->session_handler = session_handler;
+    pthread_mutex_init(&m_mutex_clients, NULL);
 }
 
 tcpServer::~tcpServer()
 {
     //dtor
+    pthread_mutex_destroy(&m_mutex_clients);
 }
 
 void tcpServer::setNodeConfigurator(nodeConfigurator *config){
@@ -49,6 +51,8 @@ void tcpServer::addCanMessage(int canid,const char* msg,int dlc){
         return;
     }
 
+    //the clients are added and removed by other threads
+    pthread_mutex_lock(&m_mutex_clients);
     if (!clients.empty()){
         std::map<int,Client*>::iterator it = clients.begin();
         while(it != clients.end())
@@ -57,6 +61,7 @@ void tcpServer::addCanMessage(int canid,const char* msg,int dlc){
             it++;
         }
     }
+    pthread_mutex_unlock(&m_mutex_clients);
 }
 
 bool tcpServer::start(){
@@ -136,7 +141,10 @@ void tcpServer::run(void* param){
                 else{
                     tcpClient *client;
                     client = new tcpClient(logger,this,can,client_sock, client_addr,counter,config,session_handler);
-                    if (clients.size() == 0){
+                    pthread_mutex_lock(&m_mutex_clients);
+                    bool first = clients.size() == 0;
+                    pthread_mutex_unlock(&m_mutex_clients);
+                    if (first){
                         turnouts->reload();
                     }
                     client->setTurnout(turnouts);
@@ -145,11 +153,14 @@ void tcpServer::run(void* param){
 
                 cl->setIp(s);
                 free(s);
-                tempClient = cl;
                 logger->debug("[tcpServer] Creating client thread %d",counter);
-                pthread_t clientThread;
-                pthread_create(&clientThread, nullptr, tcpServer::thread_entry_run_client, this);
+                //in the map before its thread starts, as the thread removes it when the client goes
+                pthread_mutex_lock(&m_mutex_clients);
                 clients.insert(std::pair<int,Client*>(counter,cl));
+                pthread_mutex_unlock(&m_mutex_clients);
+                pthread_t clientThread;
+                //the thread is given its own client: a member could be overwritten by the next connection first
+                pthread_create(&clientThread, nullptr, tcpServer::thread_entry_run_client, cl);
                 threads.push_back(clientThread);
                 counter++;
             }
@@ -165,15 +176,17 @@ void tcpServer::run(void* param){
     threads.clear();
 }
 
-void tcpServer::run_client(void* param){
-    logger->info("[tcpServer] Starting client thread %d",counter);
-    tempClient->start(nullptr);
+
+void* tcpServer::thread_entry_run_client(void *client){
+    ((Client*)client)->start(nullptr);
+    return nullptr;
 }
 
 void tcpServer::removeClients(){
     try{
 
         logger->info("[tcpServer] Stopping client connections");
+        pthread_mutex_lock(&m_mutex_clients);
         std::map<int,Client*>::iterator it = clients.begin();
         while(it != clients.end())
         {
@@ -183,14 +196,17 @@ void tcpServer::removeClients(){
         }
         //check if it dealocattes the pointers
         clients.clear();
+        pthread_mutex_unlock(&m_mutex_clients);
     }
     catch(...){
+        pthread_mutex_unlock(&m_mutex_clients);
         logger->error("[tcpServer] Failed to remove all clients");
     }
 }
 
 void tcpServer::removeClient(Client *client){
     try {
+        pthread_mutex_lock(&m_mutex_clients);
         if (clients.find(client->getId()) != clients.end()){
         logger->debug("[tcpServer] Removing tcp client with id: %d",client->getId());
         clients.erase(client->getId());
@@ -198,6 +214,7 @@ void tcpServer::removeClient(Client *client){
         else{
             logger->debug("[tcpServer] Could not remove tcp client with id: %d",client->getId());
         }
+        pthread_mutex_unlock(&m_mutex_clients);
         delete client;
     }
     catch(...){
@@ -212,7 +229,7 @@ void tcpServer::setTurnout(Turnout* turnouts){
 void tcpServer::postMessageToAllClients(int clientId,int canid,char *msg,int msize,CLIENT_TYPE ct){
     //transverse the clients and send the message to all except the clientId
     //logger->info("[tcpServer] Sending messages to other clients");
-    std::map<int,Client*>::iterator it = clients.begin();
+    std::map<int,Client*>::iterator it;
 
     bool isRTR = false;
     bool stdframe = true;
@@ -229,6 +246,8 @@ void tcpServer::postMessageToAllClients(int clientId,int canid,char *msg,int msi
         return;
     }
 
+    pthread_mutex_lock(&m_mutex_clients);
+    it = clients.begin();
     while(it != clients.end())
     {
         if (it->second->getId() != clientId){
@@ -237,5 +256,6 @@ void tcpServer::postMessageToAllClients(int clientId,int canid,char *msg,int msi
         }
         it++;
     }
+    pthread_mutex_unlock(&m_mutex_clients);
 }
 
