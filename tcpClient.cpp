@@ -338,12 +338,14 @@ void tcpClient::handleEDMessages(char* msgptr){
 					// wait until session is created
 					logger->debug("[%d] [tcpClient] Waiting for session to be created.",id);
 					int loop = 0;
-					while (loop < 4 && loco > 0){
-						usleep(500*1000);
+					// look every 10 ms, for up to 2 s: the reply usually comes within a few ms, and the
+					// throttle's next command (its first speed) waits until this loop ends
+					while (loop < 200 && loco > 0){
+						usleep(10 * 1000);
 						if (hasSession(loco)){
 							if (hasSession(loco)){
 								logger->debug("[%d] [tcpClient] Session created for loco %d.", id, loco);
-								loop = 10;
+								loop = 1000;
 							}
 						}
 						loop++;
