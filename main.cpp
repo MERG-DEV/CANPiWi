@@ -59,6 +59,9 @@ int main()
     signal(SIGTERM, sigterm);
     signal(SIGHUP, sigterm);
     signal(SIGINT, sigterm);
+    // Ignore SIGPIPE, as canpi-server does: writing to a client that has just disconnected
+    // otherwise ends the whole program
+    signal(SIGPIPE, SIG_IGN);
 
     //****************
     //default config

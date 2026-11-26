@@ -1,7 +1,30 @@
 #include "nodeConfigurator.h"
 
+namespace {
+/*
+ * Holds a mutex for as long as it exists, so the mutex is released however the
+ * function is left, including by an exception.
+ */
+class configLock
+{
+    public:
+        explicit configLock(pthread_mutex_t *mutex) : mutex(mutex) { pthread_mutex_lock(mutex); }
+        ~configLock() { pthread_mutex_unlock(mutex); }
+        configLock(const configLock&) = delete;
+        configLock& operator=(const configLock&) = delete;
+    private:
+        pthread_mutex_t *mutex;
+};
+}
+
 nodeConfigurator::nodeConfigurator(string file,log4cpp::Category *logger)
 {
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    // recursive: the functions that use the settings call each other
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&m_mutex_config, &attr);
+    pthread_mutexattr_destroy(&attr);
     this->configFile = file;
     this->logger = logger;
     loadConfig();
@@ -14,6 +37,7 @@ nodeConfigurator::nodeConfigurator(string file,log4cpp::Category *logger)
 nodeConfigurator::~nodeConfigurator()
 {
     //dtor
+    pthread_mutex_destroy(&m_mutex_config);
 }
 
 void nodeConfigurator::setNotQuotedConfigKeys(){
@@ -403,6 +427,7 @@ void nodeConfigurator::loadParamsString(string value, unsigned int idx, unsigned
 
 
 bool nodeConfigurator::saveConfig(){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
 
     map<string, string>::iterator it;
     ofstream f (configFile, ios::trunc);
@@ -432,7 +457,7 @@ bool nodeConfigurator::saveConfig(){
                 ss << "='";
                 ss << it->second;
                 ss << "']";
-                logger->debug(ss.str().c_str());
+                logger->debug("%s", ss.str().c_str()); // the text may hold a %
             }
         }
 
@@ -445,6 +470,7 @@ bool nodeConfigurator::saveConfig(){
 
 string nodeConfigurator::getStringConfig(string key)
 {
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string ret;
     ret = "";
 
@@ -462,6 +488,7 @@ string nodeConfigurator::getStringConfig(string key)
 
 int nodeConfigurator::getIntConfig(string key)
 {
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     int ret = INTERROR;
 
     if (config.size() == 0) return ret;
@@ -495,6 +522,7 @@ string nodeConfigurator::getMomentaryFn(bool fresh /*=true*/){
 }
 //gets the string to config file
 bool nodeConfigurator::setMomentaryFn(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_FNMOM) == config.end()) return false;
     config[TAG_FNMOM] = val;
     return true;
@@ -646,6 +674,7 @@ int nodeConfigurator::nvToLogLevel(){
 }
 
 bool nodeConfigurator::setTcpPort(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_TCP_PORT) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -701,6 +730,7 @@ int nodeConfigurator::getcanGridPort(){
     return ret;
 }
 bool nodeConfigurator::setCanGridPort(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_GRID_PORT) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -733,6 +763,7 @@ int nodeConfigurator::getCanID(bool fresh/*=true*/){
     return ret;
 }
 bool nodeConfigurator::setCanID(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_CANID) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -765,6 +796,7 @@ int nodeConfigurator::getNodeNumber(bool fresh/*=true*/){
     return ret;
 }
 bool nodeConfigurator::setNodeNumber(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_NN) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -786,6 +818,7 @@ bool nodeConfigurator::getAPMode(){
     return false;
 }
 bool nodeConfigurator::setAPMode(bool apmode){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (apmode) r = "True";
     else r = "False";
@@ -809,6 +842,7 @@ bool nodeConfigurator::getEdserver(){
     return false;
 }
 bool nodeConfigurator::setEdserver(bool edserver){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (edserver) r = "True";
     else r = "False";
@@ -832,6 +866,7 @@ bool nodeConfigurator::getAPNoPassword(){
     return false;
 }
 bool nodeConfigurator::setAPNoPassword(bool mode){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (mode) r = "True";
     else r = "False";
@@ -855,6 +890,7 @@ bool nodeConfigurator::getCreateLogfile(){
     return false;
 }
 bool nodeConfigurator::setCreateLogfile(bool mode){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (mode) r = "True";
     else r = "False";
@@ -878,6 +914,7 @@ bool nodeConfigurator::isCanGridEnabled(){
     return false;
 }
 bool nodeConfigurator::enableCanGrid(bool grid){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (grid) r = "True";
     else r = "False";
@@ -888,6 +925,7 @@ bool nodeConfigurator::enableCanGrid(bool grid){
 }
 
 bool nodeConfigurator::setSSID(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_SSID) == config.end()) return false;
     config[TAG_SSID] = val;
     return true;
@@ -899,6 +937,7 @@ string nodeConfigurator::getSSID(){
 }
 
 bool nodeConfigurator::setPassword(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_PASSWD) == config.end()) return false;
 
     config[TAG_PASSWD] = val;
@@ -911,6 +950,7 @@ string nodeConfigurator::getPassword(){
 }
 
 bool nodeConfigurator::setRouterSSID(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_ROUTER_SSID) == config.end()) return false;
     config[TAG_ROUTER_SSID] = val;
     return true;
@@ -923,6 +963,7 @@ string nodeConfigurator::getRouterSSID(){
 }
 
 bool nodeConfigurator::setRouterPassword(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_ROUTER_PASSWD) == config.end()) return false;
     config[TAG_ROUTER_PASSWD] = val;
     return true;
@@ -934,6 +975,7 @@ string nodeConfigurator::getRouterPassword(){
 }
 
 bool nodeConfigurator::setLogLevel(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_LOGLEVEL) == config.end()) return false;
     config[TAG_LOGLEVEL] = val;
     return true;
@@ -950,6 +992,7 @@ string nodeConfigurator::getLogLevel(){
 }
 
 bool nodeConfigurator::setLogFile(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_LOGFILE) == config.end()) return false;
     config[TAG_LOGFILE] = val;
     return true;
@@ -966,6 +1009,7 @@ string nodeConfigurator::getLogFile(){
 }
 
 bool nodeConfigurator::setServiceName(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_SERV_NAME) == config.end()) return false;
     config[TAG_SERV_NAME] = val;
     return true;
@@ -977,6 +1021,7 @@ string nodeConfigurator::getServiceName(){
 }
 
 bool nodeConfigurator::setLogAppend(bool val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (val) r = "True";
     else r = "False";
@@ -1000,6 +1045,7 @@ bool nodeConfigurator::getLogAppend(){
 }
 
 bool nodeConfigurator::setLogConsole(bool val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string r;
     if (val) r = "True";
     else r = "False";
@@ -1024,6 +1070,7 @@ bool nodeConfigurator::getLogConsole(){
 }
 
 bool nodeConfigurator::setTurnoutFile(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_TURNOUT) == config.end()) return false;
     config[TAG_TURNOUT] = val;
     return true;
@@ -1041,6 +1088,7 @@ string nodeConfigurator::getTurnoutFile(bool fresh/*=true*/){
 }
 
 bool nodeConfigurator::setCanDevice(string val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_CANDEVICE) == config.end()) return false;
     config[TAG_CANDEVICE] = val;
     return true;
@@ -1080,6 +1128,7 @@ int nodeConfigurator::getApChannel(){
     return ret;
 }
 bool nodeConfigurator::setApChannel(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_APCHANNEL) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -1112,6 +1161,7 @@ int nodeConfigurator::getStartEventID(){
 }
 
 bool nodeConfigurator::setStartEventID(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_START_EVENT) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -1152,6 +1202,7 @@ int nodeConfigurator::getPB(){
     return ret;
 }
 bool nodeConfigurator::setPB(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_BP) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -1184,6 +1235,7 @@ int nodeConfigurator::getGreenLed(){
     return ret;
 }
 bool nodeConfigurator::setGreenLed(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_GL) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -1216,6 +1268,7 @@ int nodeConfigurator::getYellowLed(){
     return ret;
 }
 bool nodeConfigurator::setYellowLed(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (config.find(TAG_YL) == config.end()) return false;
     stringstream ss;
     ss << val;
@@ -1276,6 +1329,7 @@ int nodeConfigurator::getNodeMode(){
     return ret;
 }
 bool nodeConfigurator::setNodeMode(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     stringstream ss;
     ss << val;
     if (config.find(TAG_NODE_MODE) == config.end()){
@@ -1310,6 +1364,7 @@ int nodeConfigurator::getOrphanTimeout(){
     return ret;
 }
 bool nodeConfigurator::setOrphanTimeout(int val){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     stringstream ss;
     ss << val;
     if (config.find(TAG_ORPHAN_TIMEOUT) == config.end()){
@@ -1355,6 +1410,7 @@ pair <string,string> nodeConfigurator::getpair(string val){
 }
 
 bool nodeConfigurator::loadConfig(){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     ifstream myfile;
     string line;
     pair<string,string> p;
@@ -1377,6 +1433,7 @@ bool nodeConfigurator::loadConfig(){
 }
 
 string nodeConfigurator::getPairValue(string key){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (!existConfigEntry(key)) return "";
     stringstream ss;
     ss << config[key];
@@ -1384,6 +1441,7 @@ string nodeConfigurator::getPairValue(string key){
 }
 
 bool nodeConfigurator::setNewPair(string key,string value,bool quoted){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     string ss;
     if (quoted){
         ss = "\"" + value + "\"";
@@ -1407,6 +1465,7 @@ bool nodeConfigurator::setNewPair(string key,string value,bool quoted){
 }
 
 bool nodeConfigurator::existConfigEntry(string key){
+    configLock lock(&m_mutex_config); // the settings are read and written by several threads
     if (logger != nullptr) logger->debug("[nodeConfigurator] Checking config key %s", key.c_str());
     else cout << "[nodeConfigurator] Checking config key " << key << endl;
 

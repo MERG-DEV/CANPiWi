@@ -76,7 +76,7 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
         byte h2, h1;
         int s;
         char frametype = 'N'; //should be N or R
-        char t[2];
+        char t[3]; // two hex digits and the NUL sprintf writes
         //set frame type
         if ((canid & CAN_RTR_FLAG) == CAN_RTR_FLAG) frametype = 'R';
 
@@ -140,7 +140,7 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
 
             ss << frametype;
             for (int i = 0;i < dlc; i++){
-                sprintf(t, "%02X", msg[i]);
+                sprintf(t, "%02X", (unsigned char)msg[i]);
                 ss << t;
             }
             ss << ";";
@@ -160,7 +160,7 @@ void tcpClientGridConnect::canMessage(int canid,const char* msg, int dlc){
             ss << t;
             ss << frametype;
             for (int i = 0; i < dlc; i++){
-                sprintf(t, "%02X", msg[i]);
+                sprintf(t, "%02X", (unsigned char)msg[i]);
                 ss << t;
             }
             ss << ";";
@@ -222,15 +222,28 @@ void tcpClientGridConnect::run(void *param){
     }
     logger->info("[%d] Quiting grid client connection ip:%s id:%d.",id, ip.c_str(),id);
     usleep(1000*1000); //1sec give some time for any pending thread to finish
-    close(client_sock);
+    // stop the queue thread before this client is deleted: it stops by itself now running is 0,
+    // once woken in case it is waiting
+    pthread_mutex_lock(&m_mutex_in);
+    pthread_cond_signal(&m_condv_in);
+    pthread_mutex_unlock(&m_mutex_in);
+    pthread_join(queueReader, nullptr);
+    // out of the server's list first, so no thread is still sending to this socket when it
+    // is closed (or to a new connection given the same descriptor); removeClient deletes this
+    int sock = client_sock;
     server->removeClient(this);
+    close(sock);
 }
 
 void tcpClientGridConnect::run_in_grid_msgs(void *param){
     string msg;
     while (running){
         pthread_mutex_lock(&m_mutex_in);
-        pthread_cond_wait(&m_condv_in, &m_mutex_in);
+        // Wait only while there is nothing to do. A signal given while this thread
+        // was busy is not kept, so the queue is checked before waiting.
+        while (running && in_grid_msgs.empty()){
+            pthread_cond_wait(&m_condv_in, &m_mutex_in);
+        }
         if (in_grid_msgs.empty()){
             pthread_mutex_unlock(&m_mutex_in);
         }

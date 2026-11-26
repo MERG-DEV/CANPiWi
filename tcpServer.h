@@ -32,7 +32,6 @@ class tcpServer
     protected:
     private:
         canHandler *can;
-        Client *tempClient;
         sessionHandler *session_handler;
         int running;
         int port;
@@ -42,23 +41,20 @@ class tcpServer
         CLIENT_TYPE clientType;
         log4cpp::Category *logger;
         std::map<int,Client*> clients;
+        pthread_mutex_t m_mutex_clients; // guards clients
         pthread_t serverThread;
         Turnout* turnouts;
         nodeConfigurator *config;
 
         void removeClients();
         void run(void* param);
-        void run_client(void* param);
 
         static void* thread_entry_run(void *classPtr){
             ((tcpServer*)classPtr)->run(nullptr);
             return nullptr;
         }
 
-        static void* thread_entry_run_client(void *classPtr){
-            ((tcpServer*)classPtr)->run_client(classPtr);
-            return nullptr;
-        }
+        static void* thread_entry_run_client(void *client);
 };
 
 #endif // TCPSERVER_H

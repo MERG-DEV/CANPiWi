@@ -1,10 +1,33 @@
 #include "tcpClient.h"
+
+namespace {
+/*
+ * Holds a mutex for as long as it exists, so the mutex is released however the
+ * block is left, including by an exception.
+ */
+class sessionsLock
+{
+    public:
+        explicit sessionsLock(pthread_mutex_t *mutex) : mutex(mutex) { pthread_mutex_lock(mutex); }
+        ~sessionsLock() { pthread_mutex_unlock(mutex); }
+        sessionsLock(const sessionsLock&) = delete;
+        sessionsLock& operator=(const sessionsLock&) = delete;
+    private:
+        pthread_mutex_t *mutex;
+};
+}
 #include <stdio.h>
 
 tcpClient::tcpClient(log4cpp::Category *logger, tcpServer *server,
                      canHandler* can, int client_sock, struct sockaddr_in client_addr,
                      int id, nodeConfigurator *config, sessionHandler *session_handler)
 {
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    // recursive: the functions that use the sessions call each other
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&m_mutex_sessions, &attr);
+    pthread_mutexattr_destroy(&attr);
     //ctor
 
     this->server = server;
@@ -28,6 +51,8 @@ tcpClient::tcpClient(log4cpp::Category *logger, tcpServer *server,
     this->re_idle = regex(RE_IDLE);
     this->clientType = CLIENT_TYPE::ED;
     sessions_retrieved = false;
+    sessions_done = false;
+    socket_closed = false;
 
     //get any remaining sessions
     retrieveRemainingSessions();
@@ -40,6 +65,7 @@ tcpClient::tcpClient(log4cpp::Category *logger, tcpServer *server,
 
 tcpClient::~tcpClient()
 {
+    pthread_mutex_destroy(&m_mutex_sessions);
     pthread_mutex_destroy(&m_mutex_in_cli);
     pthread_cond_destroy(&m_condv_in_cli);
 }
@@ -75,9 +101,13 @@ void tcpClient::start(void *param){
 
 void tcpClient::stop(){
     running = 0;
-	releaseAllSessions();
+	// either this or the end of run() deals with the sessions, not both
+	if (!sessions_done.exchange(true))
+	    releaseAllSessions();
     usleep(1000*1000);
-    close(client_sock);
+    // either this or the end of run() closes the socket, not both
+    if (!socket_closed.exchange(true))
+        close(client_sock);
 }
 
 void tcpClient::canMessage(int canid,const char* msg, int dlc){
@@ -117,17 +147,6 @@ void tcpClient::run(void *param){
         nbytes = recv(client_sock, msg,BUFFER_SIZE, 0);
         if (nbytes<0){
             logger->debug("[%d] [tcpClient] Error while receiving data from ED %d",id,nbytes);
-			/*
-			 * mark the existing sessions as orphan
-			 * in case the client disconnection was not proper done
-			*/
-			std::map<int,edSession*>::iterator it = sessions.begin();
-			while(it != sessions.end())
-			{
-                logger->debug("[%d] [tcpClient] Setting session %d for loco %d as orphan",id, it->second->getSession(), it->second->getLoco());
-				it->second->setOrphan(true);
-				it++;
-			}
             running = 0;
         }
         else if (nbytes>0){
@@ -141,27 +160,44 @@ void tcpClient::run(void *param){
         }
         if (nbytes == 0){
             logger->debug("[%d] [tcpClient] 0 bytes received. disconnecting",id);
-			/*
-			 * mark the existing sessions as orphan
-			 * in case the client disconnection was not proper done
-			*/
-			std::map<int,edSession*>::iterator it = sessions.begin();
-			while(it != sessions.end())
-			{
-                logger->debug("[%d] [tcpClient] Setting session %d for loco %d as orphan",id, it->second->getSession(), it->second->getLoco());
-				it->second->setOrphan(true);
-				it++;
-			}
             running = 0;
             break;
         }
     }
     logger->info("[%d] [tcpClient] Quiting client connection ip:%s id:%d.",id, ip.c_str(),id);
 
-    usleep(2000*1000); //1sec give some time for any pending thread to finish
-    try{
-        pthread_cancel(kalive);
-        pthread_cancel(cbusin);
+    // Stop this client's threads before its sessions are marked orphan, when another client from the
+    // same address may take them. They stop by themselves now running is 0; the queue thread is woken
+    // in case it is waiting. Cancelling them could leave the queue mutex locked for good.
+    pthread_mutex_lock(&m_mutex_in_cli);
+    pthread_cond_signal(&m_condv_in_cli);
+    pthread_mutex_unlock(&m_mutex_in_cli);
+    pthread_join(kalive, nullptr);
+    pthread_join(cbusin, nullptr);
+    // the connection has ended: close its socket, which was left open (one file per connection)
+    if (!socket_closed.exchange(true))
+        close(client_sock);
+
+    // either this or stop() deals with the sessions, not both
+    if (!sessions_done.exchange(true))
+    {
+        // mark the existing sessions as orphan, in case the client disconnection was not properly done
+        std::map<int, edSession *>::iterator it = sessions.begin();
+        while (it != sessions.end())
+        {
+            logger->debug("[%d] [tcpClient] Setting session %d for loco %d as orphan", id, it->second->getSession(), it->second->getLoco());
+            if (it->second->getClientId() == id) // not one another connection has taken over
+                it->second->setOrphan(true);
+            it++;
+        }
+        // the session waiting for a loco is this client's alone
+        session_handler->deleteEDSession(edsession->getSessionUid(), id);
+    }
+
+    usleep(2000 * 1000); // 2 sec: stop() may still be closing the socket
+
+    try
+    {
         server->removeClient(this);
     }
     catch(...){
@@ -179,6 +215,7 @@ void tcpClient::sendKeepAlive(void *param){
     while (running){
         try{
             usleep(1000*500);//500ms
+            sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
             if (running == 0){
                 logger->info("[%d] [tcpClient] Stopping keep alive process",id);
                 break;
@@ -237,6 +274,8 @@ void tcpClient::sendKeepAlive(void *param){
 }
 
 void tcpClient::handleEDMessages(char* msgptr){
+    // the CBUS thread adds sessions: look with the lock, but don't hold it while waiting for one
+    auto hasSession = [this](int l) { sessionsLock lock(&m_mutex_sessions); return sessions.find(l) != sessions.end(); };
 
     vector<string> msgs;
     string message (msgptr);
@@ -288,10 +327,10 @@ void tcpClient::handleEDMessages(char* msgptr){
 
 				int loco = getLoco(msg);
 
-				if (sessions.find(loco) != sessions.end()){
+				if (hasSession(loco)){
 					//session already exists, maybe imported from a dead client
 					logger->debug("[%d] [tcpClient] Session already exists %s" ,id, msg.c_str());
-					ackEDSessionCreated(sessions[loco], false);
+					{ sessionsLock lock(&m_mutex_sessions); ackEDSessionCreated(sessions[loco], false); }
 				}
 				else{
 					logger->debug("[%d] [tcpClient] Create session %s" ,id, msg.c_str());
@@ -299,17 +338,19 @@ void tcpClient::handleEDMessages(char* msgptr){
 					// wait until session is created
 					logger->debug("[%d] [tcpClient] Waiting for session to be created.",id);
 					int loop = 0;
-					while (loop < 4 && loco > 0){
-						usleep(500*1000);
-						if (sessions.size()>0){
-							if (sessions.find(loco) != sessions.end()){
+					// look every 10 ms, for up to 2 s: the reply usually comes within a few ms, and the
+					// throttle's next command (its first speed) waits until this loop ends
+					while (loop < 200 && loco > 0){
+						usleep(10 * 1000);
+						if (hasSession(loco)){
+							if (hasSession(loco)){
 								logger->debug("[%d] [tcpClient] Session created for loco %d.", id, loco);
-								loop = 10;
+								loop = 1000;
 							}
 						}
 						loop++;
 					}
-					if (sessions.find(loco) == sessions.end()){
+					if (!hasSession(loco)){
 						logger->debug("[%d] [tcpClient] No session created for loco %d.",id, loco);
 					}
 				}
@@ -376,6 +417,7 @@ void tcpClient::handleEDMessages(char* msgptr){
 }
 
 void tcpClient::retrieveRemainingSessions(){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 	/* retrieve sessions once per client*/
 	if (sessions_retrieved) return;
 	sessions_retrieved = true;
@@ -452,7 +494,11 @@ void tcpClient::processCbusQueue(void *param){
     while (running){
 
         pthread_mutex_lock(&m_mutex_in_cli);
-        pthread_cond_wait(&m_condv_in_cli, &m_mutex_in_cli);
+        // Wait only while there is nothing to do. A signal given while this thread
+        // was busy is not kept, so the queue is checked before waiting.
+        while (running && in_msgs.empty()){
+            pthread_cond_wait(&m_condv_in_cli, &m_mutex_in_cli);
+        }
 
         if (in_msgs.empty()){
             pthread_mutex_unlock(&m_mutex_in_cli);
@@ -481,6 +527,7 @@ void tcpClient::processCbusQueue(void *param){
 }
 
 void tcpClient::handleCBUS(unsigned char *msg){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     unsigned char opc = msg[0];
     int loco,tcode;
@@ -608,7 +655,7 @@ void tcpClient::sendToEd(string msg){
     logger->notice("[%d] [tcpClient] Send to ED:%s",id, msg.c_str());
     nbytes = write(client_sock,msg.c_str(),msg.length());
     if (nbytes != msg.length()){
-        logger->error("[tcpClient] Fail to send message %s to ED",id, msg.c_str());
+        logger->error("[%d] [tcpClient] Fail to send message %s to ED",id, msg.c_str());
     }
 }
 //return the loco
@@ -648,6 +695,7 @@ int tcpClient::handleCreateSession(string message){
 }
 
 void tcpClient::handleReleaseSession(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     logger->debug("[%d] [tcpClient] Handle release session %s",id, message.c_str());
     //release session
@@ -685,8 +733,10 @@ void tcpClient::handleReleaseSession(string message){
 				if (it->second->isSessionSet()){
 					logger->info("[%d] [tcpClient] Dealocating loco %d" ,id, it->second->getLoco());
 				}
-				session_handler->deleteEDSession(it->second->getSessionUid());
-                sessions.erase(it);
+				session_handler->deleteEDSession(it->second->getSessionUid(), id);
+                //erase returns the next session; the iterator erased can't be used again
+                it = sessions.erase(it);
+                continue;
             }
             it++;
         }
@@ -712,7 +762,7 @@ void tcpClient::handleReleaseSession(string message){
 			sendCbusMessage(OPC_KLOC,sesid);
 			usleep(1000*200);//200ms
 		}
-		session_handler->deleteEDSession(sessions[loco]->getSessionUid());
+		session_handler->deleteEDSession(sessions[loco]->getSessionUid(), id);
         this->sessions.erase(loco);
     }
     else logger->debug("[%d] [tcpClient] Loco %d not allocated" ,id,loco);
@@ -726,6 +776,7 @@ void tcpClient::handleReleaseSession(string message){
 }
 
 void tcpClient::releaseAllSessions(){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 	byte sesid;
 	logger->debug("[%d] [tcpClient] Releasing all sessions",id);
 
@@ -753,13 +804,14 @@ void tcpClient::releaseAllSessions(){
 		if (it->second->isSessionSet()){
 			logger->info("[%d] [tcpClient] Dealocating loco %d" ,id, it->second->getLoco());
 		}
-		session_handler->deleteEDSession(it->second->getSessionUid());
-		sessions.erase(it);
-		it++;
+		session_handler->deleteEDSession(it->second->getSessionUid(), id);
+		//erase returns the next session; the iterator erased can't be used again
+		it = sessions.erase(it);
 	}
 }
 
 void tcpClient::releaseActualSession(){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
     if (edsession->isSessionSet()){
         logger->info("[%d] [tcpClient] Releasing session for loco %d" ,id, edsession->getLoco());
         sendCbusMessage(OPC_KLOC, edsession->getSession());
@@ -769,11 +821,12 @@ void tcpClient::releaseActualSession(){
         sessions.erase(edsession->getLoco());
     }
 
-	session_handler->deleteEDSession(edsession->getSessionUid());
+	session_handler->deleteEDSession(edsession->getSessionUid(), id);
 
 }
 
 void tcpClient::deleteUnsetSessions(){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 	logger->debug("[%d] [tcpClient] Deleting all unset sessions",id);
 
 	std::map<int,edSession*>::iterator it = this->sessions.begin();
@@ -782,15 +835,18 @@ void tcpClient::deleteUnsetSessions(){
 	{
 		if (!it->second->isSessionSet()){
 			logger->info("[%d] [tcpClient] Deleting unset session %d" ,id, it->second->getSessionUid());
-			session_handler->deleteEDSession(it->second->getSessionUid());
+			session_handler->deleteEDSession(it->second->getSessionUid(), id);
             //delete(it->second);
-            sessions.erase(it);
+            //erase returns the next session; the iterator erased can't be used again
+            it = sessions.erase(it);
+            continue;
 		}
 		it++;
 	}
 }
 
 void tcpClient::handleDirection(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     logger->debug("[%d] [tcpClient] Handle Direction request %s",id, message.c_str());
     sendToEd(message + "\n");
@@ -832,6 +888,7 @@ void tcpClient::handleDirection(string message){
 }
 
 void tcpClient::handleSpeed(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     string speedString;
 
@@ -915,6 +972,7 @@ void tcpClient::handleSpeed(string message){
 }
 
 void tcpClient::handleIdle(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     string speedString;
     int edspeed = 0;
@@ -967,6 +1025,7 @@ void tcpClient::handleIdle(string message){
 }
 
 void tcpClient::handleQueryDirection(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     logger->debug("[%d] [tcpClient] Query Direction found %s",id, message.c_str());
     int i = message.find("*");
@@ -1014,6 +1073,7 @@ void tcpClient::handleQueryDirection(string message){
 }
 
 void tcpClient::handleQuerySpeed(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     logger->debug("[%d] [tcpClient] Query speed found %s",id,message.c_str());
     int i = message.find("*");
@@ -1061,6 +1121,7 @@ void tcpClient::handleQuerySpeed(string message){
 }
 
 void tcpClient::handleSetFunction(string message){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
 
     logger->debug("[%d] [tcpClient] Set function request found %s",id,message.c_str());
 
@@ -1116,6 +1177,7 @@ void tcpClient::handleSetFunction(string message){
 }
 
 bool tcpClient::programmingFn(int fn, int loco, int onoff){
+    sessionsLock lock(&m_mutex_sessions); // the sessions are used by this client's three threads
     /*
     * the programming works by having the Fn28 set
     */
@@ -1193,7 +1255,7 @@ void tcpClient::handleTurnout(string message){
         turnouts->addTurnout(scode,tcode);
     }
     if (!turnouts->exists(tcode)){
-        logger->debug("[%d] [tcpClient] Turnout $d does not exist. Inserting" ,id,tcode);
+        logger->debug("[%d] [tcpClient] Turnout %d does not exist. Inserting" ,id,tcode);
         turnouts->addTurnout(scode,tcode);
         if (!turnouts->exists(tcode)){
             logger->debug("[%d] [tcpClient] Failed to insert turnout %d" ,id, tcode);
@@ -1276,7 +1338,7 @@ void tcpClient::handleTurnoutGeneric(string message){
         turnouts->addTurnout(scode,tcode);
     }
     if (!turnouts->exists(tcode)){
-        logger->debug("[%d] [tcpClient] Turnout $d does not exist. Inserting" ,id,tcode);
+        logger->debug("[%d] [tcpClient] Turnout %d does not exist. Inserting" ,id,tcode);
         turnouts->addTurnout(scode,tcode);
         if (!turnouts->exists(tcode)){
             logger->debug("[%d] [tcpClient] Failed to insert turnout %d" ,id, tcode);
